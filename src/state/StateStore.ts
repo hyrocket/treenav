@@ -10,14 +10,22 @@ import {
 import { isSameOrDescendant, parentPath, remapPath } from "./paths";
 
 /**
+ * Settings written by earlier versions.
+ *
  * `flattenNestedFolders` used to be a boolean. `true` becomes "ask" rather than
  * "always": the boolean could not express a confirmation step, and asking is
  * the safer reading of "yes, flattening is allowed".
+ *
+ * `treeStyle` briefly had a "classic-solid" alongside a dotted "classic". The
+ * dots are gone and classic means solid, so both land on the same value.
  */
 function normalizeSettings(settings: TreeNavSettings): TreeNavSettings {
 	const flatten = settings.flattenNestedFolders as FlattenMode | boolean;
 	if (typeof flatten === "boolean") {
 		settings.flattenNestedFolders = flatten ? "ask" : "never";
+	}
+	if ((settings.treeStyle as string) === "classic-solid") {
+		settings.treeStyle = "classic";
 	}
 	return settings;
 }

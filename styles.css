@@ -308,10 +308,10 @@ input.treenav-rename-input {
  * placed at the parent's collapse box, which is one indentation step to the
  * left of the row's own.
  *
- * The dots are painted as a gradient rather than a dotted border. A dotted
- * border lets the browser space the dots to fit the line, so a long vertical
- * and a short horizontal stub end up with visibly different densities; a
- * gradient with a fixed period looks the same on both axes and at any length.
+ * The lines are hairlines rather than the traditional dots. A dotted border
+ * lets the browser space the dots to fit the line it is on, so a long vertical
+ * and a short stub came out at different densities, and on a display that is
+ * not at 100% scaling the dots landed on fractional pixels and shimmered.
  */
 
 .treenav-style-classic {
@@ -333,8 +333,7 @@ input.treenav-rename-input {
 	content: "";
 	position: absolute;
 	pointer-events: none;
-	/* Both axes share one 1px-on, 1px-off period. */
-	background-repeat: repeat;
+	background-color: var(--treenav-line);
 }
 
 /* Vertical: runs the full height of the item, children included. */
@@ -343,19 +342,6 @@ input.treenav-rename-input {
 	bottom: 0;
 	left: calc(var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px);
 	width: 1px;
-	background-image: linear-gradient(
-		to bottom,
-		var(--treenav-line) 0 1px,
-		transparent 1px 2px
-	);
-	background-size: 1px 2px;
-}
-
-/* A hairline instead of dots: steadier wherever the display is not at 100%. */
-.treenav-style-classic.treenav-lines-solid .treenav-item::before,
-.treenav-style-classic.treenav-lines-solid .treenav-item-self::before {
-	background-image: none;
-	background-color: var(--treenav-line);
 }
 
 /* The last child ends the line at its own row rather than carrying it on. */
@@ -370,8 +356,6 @@ input.treenav-rename-input {
 	left: calc(var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px);
 	width: var(--treenav-indent);
 	height: 1px;
-	background-image: linear-gradient(to right, var(--treenav-line) 0 1px, transparent 1px 2px);
-	background-size: 2px 1px;
 }
 
 /* A row with no box has nothing to stop at, so the stub reaches its icon. */

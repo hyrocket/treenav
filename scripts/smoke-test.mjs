@@ -861,16 +861,9 @@ if (!vaultArg) {
 	plugin.state.settings.treeStyle = "classic";
 	view.applyTreeStyle();
 	assert.ok(treeEl.classList.contains("treenav-style-classic"), "classic style did not apply");
-	assert.ok(!treeEl.classList.contains("treenav-lines-solid"), "dotted is the classic default");
-	plugin.state.settings.treeStyle = "classic-solid";
-	view.applyTreeStyle();
-	assert.ok(treeEl.classList.contains("treenav-style-classic"), "solid is still a classic style");
-	assert.ok(treeEl.classList.contains("treenav-lines-solid"), "solid lines did not apply");
-
 	plugin.state.settings.treeStyle = "modern";
 	view.applyTreeStyle();
-	assert.ok(!treeEl.classList.contains("treenav-style-classic"), "modern should clear both");
-	assert.ok(!treeEl.classList.contains("treenav-lines-solid"), "modern should clear both");
+	assert.ok(!treeEl.classList.contains("treenav-style-classic"), "modern did not restore");
 
 	console.log("appearance: ok");
 }
