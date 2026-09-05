@@ -913,6 +913,9 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
  * the same entries from the same plugins came out in a different order here
  * than in the explorer beside it.
  *
+ * The list is the core file explorer's own, read out of the running app. The
+ * empty string is where items with no section go, which is our whole block.
+ *
  * `addSections` is not in the public typings, so it is called only if it is
  * there: the list is a nicety, and a menu in first-come order is no worse than
  * what we had.
@@ -925,10 +928,12 @@ function orderedMenu(): Menu {
 		"open",
 		"action-primary",
 		"action",
-		// Not in the explorer's own list, but "Copy path" lands in it and would
-		// otherwise be pushed past our block and past Delete.
-		"clipboard",
 		"info",
+		// "Copy path" is a whole section drawn as a submenu, and it was renamed
+		// between versions (it was "clipboard" once). A section missing from
+		// this list falls past everything, which is how it came to sit after
+		// Delete — so if a group ever turns up at the bottom, look here first.
+		"info.copy",
 		"view",
 		"system",
 		// Ours: no section, so the whole block lands together, after the rest.
