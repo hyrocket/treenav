@@ -78,3 +78,22 @@ Projects/
 
 Nothing extra is stored: the relationship is derivable from the path, survives
 moving the folder, and is repaired automatically when the folder is renamed.
+
+## License
+
+TreeNav is free software under the **GNU General Public License v3.0 or later**
+(see [LICENSE](LICENSE)). A fork you distribute must stay under the GPL and
+ship its complete source; it may not be relicensed or released closed-source.
+
+The name "TreeNav" is not covered by that grant — please rename a published
+fork so users can tell the two apart.
+
+    Copyright (C) 2026 HY
+
+    This program is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by the Free
+    Software Foundation, either version 3 of the License, or (at your option)
+    any later version. It is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
+    Public License for more details.

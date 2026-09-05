@@ -18,7 +18,7 @@
 		"plugin",
 		"file-explorer"
 	],
-	"license": "MIT",
+	"license": "GPL-3.0-or-later",
 	"devDependencies": {
 		"@types/node": "^20.11.0",
 		"builtin-modules": "^3.3.0",
@@ -26,5 +26,9 @@
 		"jsdom": "^29.1.1",
 		"obsidian": "^1.5.7",
 		"typescript": "^5.4.0"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/hyrocket/treenav.git"
 	}
 }
