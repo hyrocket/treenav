@@ -59,6 +59,8 @@ export interface TreeNavSettings {
 	hideFolderNoteFiles: boolean;
 	/** Persist expanded folders across restarts. */
 	rememberExpandedFolders: boolean;
+	/** Follow the note being opened, wherever it was opened from. */
+	revealActiveNote: boolean;
 	/** Ask before moving an item to the trash. */
 	confirmDelete: boolean;
 	/** Draw a default icon on items with no icon of their own. */
@@ -79,6 +81,7 @@ export const DEFAULT_SETTINGS: TreeNavSettings = {
 	autoCreateFolderNote: true,
 	hideFolderNoteFiles: true,
 	rememberExpandedFolders: true,
+	revealActiveNote: false,
 	confirmDelete: true,
 	showDefaultIcons: true,
 	treeStyle: "modern",

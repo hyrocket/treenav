@@ -45,6 +45,21 @@ export default class TreeNavPlugin extends Plugin {
 			name: "Open TreeNav",
 			callback: () => void this.activateView(),
 		});
+		/*
+		 * Not one of the tree commands: those only fire while the tree has focus,
+		 * and the whole point of this one is to be reached from the editor. It
+		 * opens the view if it is not there, since being told "no tree" would be
+		 * a useless answer to "show me where I am".
+		 */
+		this.addCommand({
+			id: "reveal-active-note",
+			name: "Reveal active note",
+			checkCallback: (checking) => {
+				if (!this.app.workspace.getActiveFile()) return false;
+				if (!checking) void this.revealActiveNote();
+				return true;
+			},
+		});
 		this.registerTreeCommands();
 
 		this.registerVaultEvents();
@@ -212,6 +227,13 @@ export default class TreeNavPlugin extends Plugin {
 	 * migrating path-keyed state and keeping folder notes named after their
 	 * folder.
 	 */
+	private async revealActiveNote(): Promise<void> {
+		await this.activateView();
+		for (const leaf of this.app.workspace.getLeavesOfType(TREENAV_VIEW_TYPE)) {
+			if (leaf.view instanceof TreeNavView) leaf.view.revealActive();
+		}
+	}
+
 	private registerVaultEvents(): void {
 		this.registerEvent(
 			this.app.vault.on("rename", (file, oldPath) => {

@@ -79,6 +79,18 @@ export class TreeNavSettingTab extends PluginSettingTab {
 				}),
 			);
 
+		new Setting(containerEl)
+			.setName("Follow the active note")
+			.setDesc(
+				"Scroll to the note being edited whenever one is opened, opening the folders it sits in. Off by default, because it also opens folders you had closed; the \"Reveal active note\" command does the same thing on demand.",
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(settings.revealActiveNote).onChange(async (value) => {
+					settings.revealActiveNote = value;
+					await commit(false);
+				}),
+			);
+
 		new Setting(containerEl).setName("Shortcuts").setHeading();
 
 		new Setting(containerEl)

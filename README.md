@@ -18,6 +18,8 @@ the look and density of the built-in file explorer.
 - `Shift` + arrows moves the item itself: up, down, and in or out one level
 - Every tree action is also a command, so any key can be bound to it in
   Obsidian's hotkey settings; the commands only fire while the tree has focus
+- **Reveal active note** finds whatever is being edited, opening the folders it
+  sits in; a setting makes it follow every note you open
 - Live sync with changes made outside TreeNav
 
 **Structure**

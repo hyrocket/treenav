@@ -202,7 +202,10 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 			}),
 		);
 		this.registerEvent(
-			this.app.workspace.on("file-open", (file) => this.renderer?.setActiveFile(file)),
+			this.app.workspace.on("file-open", (file) => {
+				this.renderer?.setActiveFile(file);
+				if (this.plugin.state.settings.revealActiveNote) this.revealActive();
+			}),
 		);
 	}
 
@@ -279,6 +282,21 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	/** The command form: only a file can be copied. */
 	duplicateItem(item: TreeItem): void {
 		if (item.file instanceof TFile) void this.duplicate(item.file);
+	}
+
+	/**
+	 * Scrolls to the note being edited, opening whatever folders stand in the
+	 * way. A hidden folder note has no row of its own, so its folder is shown
+	 * instead — which is the row that carries its highlight anyway.
+	 */
+	revealActive(): void {
+		const file = this.app.workspace.getActiveFile();
+		if (!file || !this.renderer) return;
+
+		const hidden =
+			this.plugin.state.settings.hideFolderNoteFiles && this.plugin.folderNotes.isFolderNote(file);
+		const item = this.renderer.reveal(hidden ? parentPath(file.path) : file.path);
+		if (item) this.renderer.select(item);
 	}
 
 	newNote(): void {

@@ -537,6 +537,9 @@ function emit(name, ...args) {
 /** Leaves the run has opened, in the shape `getLeavesOfType` reports. */
 const openLeaves = [];
 
+/** What the workspace reports as the note being edited. */
+let activeFile = null;
+
 const app = {
 	__viewFactories: new Map(),
 	vault: {
@@ -590,7 +593,8 @@ const app = {
 	},
 	workspace: {
 		on,
-		getActiveFile: () => null,
+		// Settable, so revealing the note being edited can be exercised.
+		getActiveFile: () => activeFile,
 		getLeaf: () => ({ openFile: async () => {} }),
 		// The plugin fans work out to its open views through here, so the one the
 		// run creates has to be reachable.
@@ -1427,5 +1431,36 @@ assert.notEqual(copied.value.path, original.path, "a copy needs a name of its ow
 assert.ok(copied.value.name.endsWith(".md"), "the extension should be kept");
 
 console.log("make a copy: ok");
+
+// --- Revealing the note being edited -----------------------------------------
+
+view.renderer.collapseAll();
+const deep = byPath.get("Archive/2024/Q1/Old note.md");
+assert.ok(deep, "the note to reveal is missing");
+assert.equal(view.renderer.getItem(deep.path), undefined, "it should start out of sight");
+
+activeFile = deep;
+view.revealActive();
+
+assert.ok(view.renderer.getItem(deep.path), "revealing should open the folders in the way");
+assert.equal(
+	view.renderer.getSelected()?.path,
+	deep.path,
+	"the revealed row should be the one selected",
+);
+
+// A hidden folder note has no row of its own; its folder carries it.
+view.renderer.collapseAll();
+activeFile = byPath.get("Ideas/Ideas.md");
+assert.ok(activeFile, "the folder note is missing");
+view.revealActive();
+assert.equal(
+	view.renderer.getSelected()?.path,
+	"Ideas",
+	"a hidden folder note should reveal its folder",
+);
+
+activeFile = null;
+console.log("reveal active: ok");
 
 console.log("\nsmoke test passed");
