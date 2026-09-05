@@ -9,6 +9,7 @@ import { TreeContext, TreeItem } from "./TreeItem";
 
 export interface TreeRendererHost {
 	onItemClick(item: TreeItem, event: MouseEvent): void;
+	onItemDoubleClick(item: TreeItem): void;
 	onItemContextMenu(item: TreeItem, event: MouseEvent): void;
 	/** A click that only changed the selection, opening nothing. */
 	onSelectionClick(item: TreeItem): void;
@@ -108,6 +109,10 @@ export class TreeRenderer implements TreeContext {
 		}
 		this.select(item);
 		this.host.onItemClick(item, event);
+	}
+
+	handleDoubleClick(item: TreeItem): void {
+		this.host.onItemDoubleClick(item);
 	}
 
 	handleAuxClick(item: TreeItem, event: MouseEvent): void {

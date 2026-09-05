@@ -83,6 +83,22 @@
 	white-space: nowrap;
 }
 
+/*
+ * A highlighted name shrinks to its text, so the colour reads as a marker pen
+ * rather than a bar across the row. It can still shrink further and ellipsis
+ * when the row is narrow.
+ */
+.treenav-item-title.treenav-has-highlight {
+	flex: 0 1 auto;
+	padding: 0 4px;
+	border-radius: var(--radius-s);
+}
+
+/* While renaming, the field wants the whole row back. */
+.treenav-item-title.treenav-is-editing {
+	flex: 1 1 auto;
+}
+
 /* --- Collapse arrow ------------------------------------------------------ */
 
 .treenav-collapse-icon {
@@ -343,6 +359,18 @@ input.treenav-rename-input {
 button.treenav-is-on {
 	background-color: var(--interactive-accent);
 	color: var(--text-on-accent);
+}
+
+/*
+ * The icon picker in columns. One entry per line was a very long scroll, and
+ * the names are what make the emoji findable, so they stay.
+ */
+.treenav-icon-picker .prompt-results,
+.treenav-icon-picker .prompt-results .suggestion {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 0 var(--size-4-2);
+	align-content: start;
 }
 
 /* --- Color swatches ------------------------------------------------------ */

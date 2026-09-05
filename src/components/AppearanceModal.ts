@@ -20,6 +20,19 @@ const SWATCHES: { name: string; value: string }[] = [
 	{ name: "Faint", value: "var(--text-faint)" },
 ];
 
+/**
+ * Highlighter colours. Translucent rather than solid: the name keeps the theme's
+ * own text colour on top, and the same value works in light and dark.
+ */
+const HIGHLIGHTS: { name: string; value: string }[] = [
+	{ name: "Yellow", value: "rgba(255, 208, 0, 0.35)" },
+	{ name: "Green", value: "rgba(0, 200, 83, 0.28)" },
+	{ name: "Blue", value: "rgba(0, 145, 255, 0.28)" },
+	{ name: "Pink", value: "rgba(255, 0, 130, 0.22)" },
+	{ name: "Orange", value: "rgba(255, 130, 0, 0.3)" },
+	{ name: "Purple", value: "rgba(160, 80, 255, 0.28)" },
+];
+
 const TYPEFACES: Record<string, string> = {
 	"": "Theme default",
 	interface: "Interface",
@@ -43,6 +56,7 @@ export class AppearanceModal extends Modal {
 	private previewIconEl!: HTMLElement;
 	private previewTitleEl!: HTMLElement;
 	private swatchEls: HTMLElement[] = [];
+	private highlightEls: HTMLElement[] = [];
 	private boldButton!: ButtonComponent;
 	private italicButton!: ButtonComponent;
 
@@ -64,6 +78,7 @@ export class AppearanceModal extends Modal {
 		this.buildPreview();
 		this.buildIcon();
 		this.buildColor();
+		this.buildHighlight();
 		this.buildText();
 		this.buildFooter();
 
@@ -128,6 +143,27 @@ export class AppearanceModal extends Modal {
 			el.setAttribute("aria-label", swatch.name);
 			el.style.backgroundColor = swatch.value;
 			el.addEventListener("click", () => this.set({ color: swatch.value }));
+			return el;
+		});
+	}
+
+	private buildHighlight(): void {
+		new Setting(this.contentEl)
+			.setName("Highlight")
+			.setDesc("A marker pen behind the name.")
+			.addExtraButton((button) =>
+				button
+					.setIcon("rotate-ccw")
+					.setTooltip("No highlight")
+					.onClick(() => this.set({ background: undefined })),
+			);
+
+		const grid = this.contentEl.createDiv({ cls: "treenav-swatch-grid" });
+		this.highlightEls = HIGHLIGHTS.map((swatch) => {
+			const el = grid.createDiv({ cls: "treenav-swatch" });
+			el.setAttribute("aria-label", swatch.name);
+			el.style.backgroundColor = swatch.value;
+			el.addEventListener("click", () => this.set({ background: swatch.value }));
 			return el;
 		});
 	}
@@ -219,10 +255,16 @@ export class AppearanceModal extends Modal {
 			row.style.fontSize = this.draft.fontSize ? `${this.draft.fontSize}px` : "";
 		}
 
+		this.previewTitleEl.style.backgroundColor = this.draft.background ?? "";
+		this.previewTitleEl.toggleClass("treenav-has-highlight", !!this.draft.background);
+
 		this.styles.renderIcon(this.previewIconEl, this.file, this.draft.icon);
 
 		this.swatchEls.forEach((el, index) =>
 			el.toggleClass("treenav-is-current", SWATCHES[index].value === this.draft.color),
+		);
+		this.highlightEls.forEach((el, index) =>
+			el.toggleClass("treenav-is-current", HIGHLIGHTS[index].value === this.draft.background),
 		);
 		this.boldButton?.buttonEl.toggleClass("treenav-is-on", this.draft.fontWeight === "bold");
 		this.italicButton?.buttonEl.toggleClass("treenav-is-on", this.draft.fontStyle === "italic");
@@ -233,6 +275,7 @@ export class AppearanceModal extends Modal {
 		this.onSubmit({
 			icon: this.draft.icon,
 			color: this.draft.color,
+			background: this.draft.background,
 			fontFamily: this.draft.fontFamily,
 			fontWeight: this.draft.fontWeight,
 			fontStyle: this.draft.fontStyle,

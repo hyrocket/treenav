@@ -10,7 +10,8 @@ the look and density of the built-in file explorer.
 
 - Sidebar view with a ribbon icon and an **Open TreeNav** command
 - Expand & collapse, remembered across restarts; active note highlighted. One
-  header button collapses everything, or expands it when nothing is open
+  header button collapses everything, or expands it when nothing is open, and
+  a double click folds a folder
 - Keyboard navigation: arrows, `Enter`, `F2`, `Delete`, `Ctrl/⌘+N`, `Ctrl/⌘+Shift+N`
 - Multi-select with `Ctrl/⌘`+click and `Shift`+click, `Ctrl/⌘+A` for everything
   on screen, `Escape` to narrow back to one. Middle click opens in a new tab
@@ -37,13 +38,14 @@ the look and density of the built-in file explorer.
 
 **Appearance**
 
-- One **Font & color** dialog per item — color, typeface, emphasis, size and
-  the icon, previewed on a live copy of the row and applied together
+- One **Font & color** dialog per item — color, highlight, typeface, emphasis,
+  size and the icon, previewed on a live copy of the row and applied together
 - Stored in plugin data, never written into your notes
 - Typefaces are the theme's own (interface / text / monospace), so a styled item
   looks right on any machine
 - Icons come from anything Obsidian has registered (Lucide and whatever other
-  plugins added) or from an emoji, typed straight into the search box
+  plugins added) or from an emoji, typed straight into the search box; the
+  picker lists them in columns, with the names kept
 - A folder you made looks like a folder; a folder that came from nesting keeps
   the note icon, because it is still that note
 - Two tree styles: modern indentation, or the boxed connector lines of a

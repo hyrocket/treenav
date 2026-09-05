@@ -82,6 +82,20 @@ export class StyleService {
 	}
 
 	/**
+	 * Paints the highlight behind the name.
+	 *
+	 * The title is its own element and normally stretches to the end of the row,
+	 * so a background on it would be a bar rather than a highlighter. Shrinking
+	 * it to its text is what makes it read as one; the class does that, and the
+	 * name still gets its ellipsis when there is no room.
+	 */
+	applyToTitle(titleEl: HTMLElement, path: string): void {
+		const background = this.get(path)?.background;
+		titleEl.style.backgroundColor = background ?? "";
+		titleEl.toggleClass("treenav-has-highlight", !!background);
+	}
+
+	/**
 	 * Fills the row's icon slot. The slot is always reserved, so a custom icon
 	 * never shifts a title out of line with its neighbours.
 	 */

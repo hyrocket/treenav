@@ -39,6 +39,8 @@ export type FontStyle = "normal" | "italic";
 export interface TreeNavStyle {
 	icon?: string;
 	color?: string;
+	/** Highlight behind the name. Translucent, so it reads on either theme. */
+	background?: string;
 	fontFamily?: FontFamily;
 	fontWeight?: FontWeight;
 	fontStyle?: FontStyle;

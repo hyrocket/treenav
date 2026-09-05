@@ -336,6 +336,19 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		this.treeEl?.focus();
 	}
 
+	/**
+	 * Double-clicking a folder folds it.
+	 *
+	 * The first click of the pair has already expanded it and opened its note,
+	 * so in practice this is how a folder gets closed without aiming at the
+	 * small arrow. Waiting to see whether a second click is coming would make
+	 * every single click feel slow, which is the worse trade.
+	 */
+	onItemDoubleClick(item: TreeItem): void {
+		if (!item.isFolder) return;
+		item.setExpanded(false);
+	}
+
 	/** Middle click opens in a new tab, the gesture the modifier used to be. */
 	onItemAuxClick(item: TreeItem, event: MouseEvent): void {
 		this.treeEl?.focus();
@@ -472,6 +485,12 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	private showSelectionMenu(files: TAbstractFile[], event: MouseEvent): void {
 		const menu = orderedMenu();
 		const count = `${files.length} items`;
+
+		// Obsidian has a separate event for a set of files, which is what the
+		// core explorer uses for its own multi-row menu. Without it the entries
+		// that know how to act on several at once never reach this menu.
+		this.app.workspace.trigger("files-menu", menu, files, "file-explorer-context-menu", null);
+		menu.addSeparator();
 
 		menu.addItem((entry) =>
 			entry

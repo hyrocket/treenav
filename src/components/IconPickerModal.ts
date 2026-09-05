@@ -48,6 +48,37 @@ const EMOJI: [string, string][] = [
 	["📚", "books reading library"],
 	["🏠", "home house"],
 	["🌍", "world global"],
+	["👤", "person user profile"],
+	["👥", "people group team"],
+	["🧑‍💻", "developer engineer coding"],
+	["👨‍💼", "manager office worker"],
+	["👩‍🎓", "student graduate learning"],
+	["🙋", "raising hand ask question"],
+	["🙂", "smile good fine"],
+	["😐", "neutral so-so meh"],
+	["😟", "worried bad problem"],
+	["🤔", "thinking unsure maybe"],
+	["😅", "sweat awkward close call"],
+	["🥳", "celebrate party done"],
+	["👍", "thumbs up approved yes"],
+	["👎", "thumbs down rejected no"],
+	["👀", "eyes watching review"],
+	["✋", "stop hold wait"],
+	["🙏", "thanks please request"],
+	["🔨", "build work hammer"],
+	["🧹", "cleanup chore tidy"],
+	["🧩", "piece component puzzle"],
+	["📎", "attachment clip"],
+	["🔗", "link reference"],
+	["🏷️", "label tag"],
+	["⏳", "waiting pending hourglass"],
+	["🔁", "repeat recurring loop"],
+	["⏸️", "paused on hold"],
+	["▶️", "start play active"],
+	["🏫", "school class course"],
+	["🏥", "hospital health medical"],
+	["🚗", "car drive travel"],
+	["✈️", "flight trip travel"],
 	["🔴", "red circle"],
 	["🟠", "orange circle"],
 	["🟡", "yellow circle"],
@@ -76,6 +107,9 @@ export class IconPickerModal extends FuzzySuggestModal<IconChoice> {
 	) {
 		super(app);
 		this.setPlaceholder("Search icons, or type an emoji…");
+		// Laid out in columns by our own stylesheet: one entry per line made for
+		// a very long scroll, and the names are worth keeping.
+		this.modalEl.addClass("treenav-icon-picker");
 
 		this.choices = [
 			{ id: null, label: "No icon" },

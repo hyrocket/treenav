@@ -1032,6 +1032,16 @@ if (!vaultArg) {
 	modal.contentEl.querySelector('.treenav-swatch[aria-label="Blue"]').click();
 	assert.equal(previewRow.style.color, "var(--color-blue)", "a swatch should reach the preview");
 
+	// The second grid is the highlighter; its colours share names with the first.
+	const highlights = modal.contentEl.querySelectorAll(".treenav-swatch-grid")[1];
+	assert.ok(highlights, "the highlight swatches are missing");
+	highlights.children[0].click();
+	const previewTitle = previewRow.querySelector(".treenav-item-title");
+	assert.ok(
+		previewTitle.classList.contains("treenav-has-highlight"),
+		"a highlight should shrink the name to its text",
+	);
+
 	const named = (text) =>
 		[...modal.contentEl.querySelectorAll("button")].find((el) => el.textContent === text);
 	named("Apply").click();
@@ -1041,6 +1051,10 @@ if (!vaultArg) {
 	assert.equal(stored?.color, "var(--color-blue)", "Apply should store the color");
 	const row = content.querySelector('[data-path="Welcome.md"]');
 	assert.equal(row.style.fontWeight, "bold", "the tree row should follow the dialog");
+	assert.ok(
+		row.querySelector(".treenav-item-title").classList.contains("treenav-has-highlight"),
+		"the highlight should reach the tree row too",
+	);
 
 	// Reset clears every property at once, including the icon.
 	plugin.styles.update("Welcome.md", { icon: "lucide-star" });
@@ -1375,5 +1389,19 @@ assert.ok(
 );
 
 console.log("context menu: ok");
+
+// --- Double-clicking a folder folds it ---------------------------------------
+
+const ideas = view.renderer.getItem("Ideas");
+ideas.setExpanded(true);
+assert.ok(ideas.isExpanded, "the folder should start open");
+ideas.rowEl.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true }));
+assert.ok(!ideas.isExpanded, "a double click should fold the folder");
+
+// A note has nothing to fold, and must not be disturbed by one.
+const note = view.renderer.getItem("Ideas/Welcome.md") ?? view.renderer.getVisibleItems()[0];
+note.rowEl.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true }));
+
+console.log("double click: ok");
 
 console.log("\nsmoke test passed");
