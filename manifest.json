@@ -1,0 +1,9 @@
+{
+	"id": "treenav",
+	"name": "TreeNav",
+	"version": "0.1.0",
+	"minAppVersion": "1.5.0",
+	"description": "Unified navigation tree: folder notes, note nesting by drag, manual ordering, and per-item icons, colors and fonts.",
+	"author": "HY",
+	"isDesktopOnly": false
+}

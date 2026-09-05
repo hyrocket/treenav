@@ -1,0 +1,80 @@
+# TreeNav
+
+A unified navigation tree for Obsidian: folder notes, drag & drop, inline rename
+and (from Phase 2) per-item icons and colors, in one sidebar view that follows
+the look and density of the built-in file explorer.
+
+## What it does
+
+**Navigation**
+
+- Sidebar view with a ribbon icon and an **Open TreeNav** command
+- Expand & collapse, remembered across restarts; active note highlighted
+- Keyboard navigation: arrows, `Enter`, `F2`, `Delete`, `Ctrl/⌘+N`, `Ctrl/⌘+Shift+N`
+- Live sync with changes made outside TreeNav
+
+**Structure**
+
+- Folder notes (`Projects/Projects.md`), hidden from the listing by default,
+  kept in sync in both directions when either half is renamed
+- Drag a note onto another note's icon to nest it underneath: the target
+  becomes a folder note and keeps opening the same note
+- Pull the last child back out and the folder collapses back into a plain note
+- Drag onto a name to place an item above or below it; that folder then keeps
+  its manual order
+- Inline rename, new note / new folder, **Move to…**, delete via trash
+
+**Appearance**
+
+- Per-item icon, color, font weight, style and size, stored in plugin data and
+  never written into your notes
+- Folders and notes share one icon; the collapse arrow alone marks what has
+  children
+
+## Design notes
+
+Path-keyed state (expanded folders, styles, manual order, folders created by
+nesting) is migrated on every vault rename, because Obsidian exposes no stable
+file id. Nesting and flattening hand the row's position and appearance over to
+whichever path now represents it.
+
+## Development
+
+```bash
+npm install
+npm run dev            # watch build, deployed into ./test-vault
+npm run build          # typecheck + bundle + smoke test
+npm run smoke          # render the built plugin against a stubbed Obsidian API
+npm run reset          # rebuild ./test-vault to a known fixture
+npm run deploy -- "D:/path/to/vault"
+```
+
+`npm run smoke` loads the real `main.js` under jsdom with a fake vault, so
+rendering, folder notes, nesting and flattening are checked without opening
+Obsidian. It also guards against shadowing undocumented members of Obsidian's
+runtime classes, which type-check cleanly and break the plugin silently.
+
+## Install for testing
+
+```bash
+npm install
+npm run build          # or: npm run dev   (watch mode)
+```
+
+Then copy `manifest.json`, `main.js` and `styles.css` into
+`<vault>/.obsidian/plugins/treenav/` and enable the plugin in
+**Settings → Community plugins**. During development it is easier to build
+directly into that folder — clone the repo there and run `npm run dev`.
+
+## Folder notes
+
+TreeNav uses the "note of the same name inside the folder" convention:
+
+```
+Projects/
+  Projects.md      <- the folder note for "Projects"
+  Planning.md
+```
+
+Nothing extra is stored: the relationship is derivable from the path, survives
+moving the folder, and is repaired automatically when the folder is renamed.

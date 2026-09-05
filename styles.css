@@ -1,0 +1,259 @@
+/* TreeNav — styled with Obsidian's own navigation variables so it matches the
+   core file explorer in both light and dark themes. */
+
+.treenav-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	padding: 0;
+
+	--treenav-indent: 17px;
+	--treenav-row-height: 24px;
+}
+
+.treenav-header {
+	flex: 0 0 auto;
+}
+
+.treenav-tree {
+	flex: 1 1 auto;
+	overflow-y: auto;
+	overflow-x: hidden;
+	padding: var(--size-4-2) var(--size-4-2) var(--size-4-8);
+	outline: none;
+}
+
+/* --- Rows ---------------------------------------------------------------- */
+
+.treenav-item-self {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	min-height: var(--treenav-row-height);
+	padding: var(--size-2-1) var(--size-4-1);
+	padding-left: calc(var(--size-4-1) + var(--treenav-depth, 0) * var(--treenav-indent));
+	border-radius: var(--radius-s);
+	color: var(--nav-item-color);
+	font-size: var(--nav-item-size, var(--font-ui-small));
+	font-weight: var(--nav-item-weight, inherit);
+	line-height: var(--line-height-tight);
+	cursor: var(--cursor);
+	user-select: none;
+}
+
+.treenav-item-self:hover {
+	background-color: var(--nav-item-background-hover);
+	color: var(--nav-item-color-hover);
+}
+
+.treenav-folder > .treenav-item-self {
+	color: var(--nav-item-color, var(--text-muted));
+}
+
+.treenav-item-self.treenav-is-selected {
+	background-color: var(--nav-item-background-selected, var(--background-modifier-hover));
+	color: var(--nav-item-color-selected, var(--nav-item-color-active));
+}
+
+.treenav-item-self.treenav-is-active {
+	background-color: var(--nav-item-background-active);
+	color: var(--nav-item-color-active);
+	font-weight: var(--nav-item-weight-active, var(--font-medium));
+}
+
+.treenav-item-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* --- Collapse arrow ------------------------------------------------------ */
+
+.treenav-collapse-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	/* Files reserve the same box, so titles stay aligned across the tree. */
+	width: 16px;
+	height: 16px;
+	color: var(--text-faint);
+	transition: transform 100ms ease-in-out;
+}
+
+.treenav-collapse-icon .svg-icon {
+	width: 12px;
+	height: 12px;
+}
+
+/* Notes, and folders with nothing to show, keep the slot but hide the arrow. */
+.treenav-item.treenav-is-leaf > .treenav-item-self > .treenav-collapse-icon {
+	visibility: hidden;
+}
+
+.treenav-folder.treenav-is-expanded > .treenav-item-self > .treenav-collapse-icon {
+	transform: rotate(90deg);
+}
+
+/* --- Depth guides -------------------------------------------------------- */
+
+.treenav-children {
+	position: relative;
+}
+
+.treenav-children::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--size-4-1) + var(--treenav-depth, 0) * var(--treenav-indent) + 8px);
+	border-left: 1px solid var(--nav-indentation-guide-color, var(--background-modifier-border));
+	pointer-events: none;
+}
+
+/* --- Drag & drop --------------------------------------------------------- */
+
+.treenav-item-self.treenav-is-dragging {
+	opacity: 0.5;
+}
+
+/* Dropping into a folder. */
+.treenav-item-self.treenav-drop-into {
+	background-color: var(--background-modifier-hover);
+	box-shadow: inset 0 0 0 1px var(--interactive-accent);
+}
+
+/* Dropping onto a note's icon, which will adopt the dragged item. */
+.treenav-item-self.treenav-drop-nest {
+	background-color: var(--background-modifier-hover);
+}
+
+.treenav-item-self.treenav-drop-nest .treenav-item-icon {
+	color: var(--interactive-accent);
+	border-radius: var(--radius-s);
+	box-shadow: 0 0 0 2px var(--interactive-accent);
+}
+
+/* Insertion line, aligned with the title of the row it belongs to. */
+.treenav-item-self.treenav-drop-before::after,
+.treenav-item-self.treenav-drop-after::after {
+	content: "";
+	position: absolute;
+	left: calc(var(--size-4-1) + var(--treenav-depth, 0) * var(--treenav-indent));
+	right: var(--size-4-1);
+	height: 2px;
+	border-radius: 1px;
+	background-color: var(--color-red);
+	pointer-events: none;
+}
+
+.treenav-item-self.treenav-drop-before::after {
+	top: -1px;
+}
+
+.treenav-item-self.treenav-drop-after::after {
+	bottom: -1px;
+}
+
+.treenav-tree.treenav-is-drop-target {
+	box-shadow: inset 0 0 0 1px var(--interactive-accent);
+	border-radius: var(--radius-s);
+}
+
+/* --- Inline rename ------------------------------------------------------- */
+
+.treenav-item-title.treenav-is-editing {
+	overflow: visible;
+}
+
+input.treenav-rename-input {
+	width: 100%;
+	height: auto;
+	padding: 0 var(--size-2-1);
+	border: 1px solid var(--interactive-accent);
+	border-radius: var(--radius-s);
+	background-color: var(--background-primary);
+	color: var(--text-normal);
+	font-family: inherit;
+	font-size: inherit;
+	line-height: inherit;
+}
+
+/* --- Item icons ---------------------------------------------------------- */
+
+.treenav-item-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	/* Reserved on every row, so a styled item stays aligned with its siblings. */
+	width: 16px;
+	height: 16px;
+}
+
+.treenav-item-icon .svg-icon {
+	width: 15px;
+	height: 15px;
+}
+
+.treenav-item-icon.treenav-is-default-icon {
+	color: var(--text-faint);
+}
+
+/* --- Icon picker --------------------------------------------------------- */
+
+.treenav-icon-suggestion {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+}
+
+.treenav-icon-suggestion-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 20px;
+	height: 20px;
+	color: var(--text-muted);
+}
+
+.treenav-icon-suggestion-label {
+	flex: 1 1 auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.treenav-icon-suggestion-current {
+	flex: 0 0 auto;
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+}
+
+/* --- Color swatches ------------------------------------------------------ */
+
+.treenav-swatch-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
+	gap: var(--size-4-2);
+	margin-bottom: var(--size-4-4);
+}
+
+.treenav-swatch {
+	height: 32px;
+	border-radius: var(--radius-s);
+	border: 1px solid var(--background-modifier-border);
+	cursor: var(--cursor);
+}
+
+.treenav-swatch:hover {
+	border-color: var(--interactive-accent);
+}
+
+.treenav-swatch.treenav-is-current {
+	box-shadow: 0 0 0 2px var(--interactive-accent);
+}

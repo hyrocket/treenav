@@ -1,0 +1,30 @@
+{
+	"name": "treenav",
+	"version": "0.1.0",
+	"description": "Unified navigation tree for Obsidian.",
+	"main": "main.js",
+	"private": true,
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && node scripts/smoke-test.mjs",
+		"typecheck": "tsc -noEmit -skipLibCheck",
+		"deploy": "node scripts/deploy.mjs",
+		"build:deploy": "npm run build && node scripts/deploy.mjs",
+		"reset": "node scripts/reset-test-vault.mjs",
+		"smoke": "node scripts/smoke-test.mjs"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"file-explorer"
+	],
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^20.11.0",
+		"builtin-modules": "^3.3.0",
+		"esbuild": "^0.20.0",
+		"jsdom": "^29.1.1",
+		"obsidian": "^1.5.7",
+		"typescript": "^5.4.0"
+	}
+}

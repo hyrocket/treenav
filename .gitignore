@@ -1,0 +1,13 @@
+node_modules/
+
+# Build output
+main.js
+*.js.map
+
+# Plugin data written by Obsidian
+data.json
+
+# Disposable fixture; `npm run reset` recreates it
+test-vault/
+
+.DS_Store
