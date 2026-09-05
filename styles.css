@@ -305,9 +305,19 @@ input.treenav-rename-input {
  * The connector lines of a traditional tree view. Each item draws the vertical
  * segment beside it and a horizontal stub into its own row, so the line stops
  * at the last child of a folder rather than running past it. The vertical is
- * placed at the parent's collapse arrow, which is one indentation step to the
+ * placed at the parent's collapse box, which is one indentation step to the
  * left of the row's own.
+ *
+ * The dots are painted as a gradient rather than a dotted border. A dotted
+ * border lets the browser space the dots to fit the line, so a long vertical
+ * and a short horizontal stub end up with visibly different densities; a
+ * gradient with a fixed period looks the same on both axes and at any length.
  */
+
+.treenav-style-classic {
+	--treenav-line: var(--background-modifier-border);
+	--treenav-row-height: 21px;
+}
 
 .treenav-style-classic .treenav-children::before {
 	/* Replaced by the per-item segments below. */
@@ -322,18 +332,23 @@ input.treenav-rename-input {
 .treenav-style-classic .treenav-item-self::before {
 	content: "";
 	position: absolute;
-	border-color: var(--nav-indentation-guide-color, var(--background-modifier-border));
 	pointer-events: none;
+	/* Both axes share one 1px-on, 1px-off period. */
+	background-repeat: repeat;
 }
 
 /* Vertical: runs the full height of the item, children included. */
 .treenav-style-classic .treenav-item::before {
 	top: 0;
 	bottom: 0;
-	left: calc(
-		var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px
+	left: calc(var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px);
+	width: 1px;
+	background-image: linear-gradient(
+		to bottom,
+		var(--treenav-line) 0 1px,
+		transparent 1px 2px
 	);
-	border-left: 1px dotted;
+	background-size: 1px 2px;
 }
 
 /* The last child ends the line at its own row rather than carrying it on. */
@@ -342,20 +357,33 @@ input.treenav-rename-input {
 	height: calc(var(--treenav-row-height) / 2);
 }
 
-/* Horizontal: from that vertical across to this row's arrow. */
+/* Horizontal: from that vertical across to this row's own box. */
 .treenav-style-classic .treenav-item-self::before {
 	top: calc(var(--treenav-row-height) / 2);
-	left: calc(
-		var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px
-	);
-	width: calc(var(--treenav-indent) - 1px);
-	border-top: 1px dotted;
+	left: calc(var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px);
+	width: var(--treenav-indent);
+	height: 1px;
+	background-image: linear-gradient(to right, var(--treenav-line) 0 1px, transparent 1px 2px);
+	background-size: 2px 1px;
+}
+
+/* A row with no box has nothing to stop at, so the stub reaches its icon. */
+.treenav-style-classic .treenav-item.treenav-is-leaf > .treenav-item-self::before {
+	width: calc(var(--treenav-indent) + 10px);
 }
 
 /* Top-level rows have no parent to connect to. */
 .treenav-style-classic > .treenav-item::before,
 .treenav-style-classic > .treenav-item > .treenav-item-self::before {
 	display: none;
+}
+
+/* Tighter rows, the way a classic tree packs them. */
+.treenav-style-classic .treenav-item-self {
+	min-height: var(--treenav-row-height);
+	padding-top: 0;
+	padding-bottom: 0;
+	border-radius: 0;
 }
 
 /* Boxed +/- in place of the chevron, masking the line it sits on. */
@@ -372,13 +400,13 @@ input.treenav-rename-input {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 11px;
-	height: 11px;
-	border: 1px solid var(--nav-indentation-guide-color, var(--background-modifier-border));
+	width: 9px;
+	height: 9px;
+	border: 1px solid var(--treenav-line);
 	background-color: var(--background-secondary);
 	color: var(--text-muted);
 	font-family: var(--font-monospace);
-	font-size: 10px;
+	font-size: 9px;
 	line-height: 1;
 }
 
@@ -386,15 +414,11 @@ input.treenav-rename-input {
 	.treenav-folder.treenav-is-expanded
 	> .treenav-item-self
 	> .treenav-collapse-icon::before {
-	content: "\2212";
+	/* U+2212 minus sign, written literally: a CSS escape is easy to mangle. */
+	content: "−";
 }
 
 /* A leaf keeps the slot but shows no box, so titles stay in line. */
 .treenav-style-classic .treenav-item.treenav-is-leaf > .treenav-item-self > .treenav-collapse-icon {
 	visibility: hidden;
-}
-
-/* Tighter rows, the way a classic tree packs them. */
-.treenav-style-classic .treenav-item-self {
-	border-radius: 0;
 }
