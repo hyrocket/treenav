@@ -1,5 +1,5 @@
-import { App, Modal, Setting } from "obsidian";
-import { FontFamily, FontStyle, FontWeight, TreeNavStyle } from "../types";
+import { App, DropdownComponent, Modal, Setting, TextComponent } from "obsidian";
+import { FONT_TOKENS, FontStyle, FontToken, FontWeight, TreeNavStyle } from "../types";
 
 /**
  * Obsidian's own accent colours, so a coloured item still belongs to the
@@ -87,22 +87,7 @@ export class FontModal extends Modal {
 	onOpen(): void {
 		this.titleEl.setText(`Font — ${this.itemName}`);
 
-		new Setting(this.contentEl)
-			.setName("Typeface")
-			.setDesc("Follows the fonts your theme defines, so it travels between devices.")
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOptions({
-						"": "Theme default",
-						interface: "Interface",
-						text: "Text",
-						monospace: "Monospace",
-					})
-					.setValue(this.draft.fontFamily ?? "")
-					.onChange((value) => {
-						this.draft.fontFamily = (value || undefined) as FontFamily | undefined;
-					}),
-			);
+		this.buildTypeface();
 
 		new Setting(this.contentEl).setName("Weight").addDropdown((dropdown) =>
 			dropdown
@@ -155,6 +140,60 @@ export class FontModal extends Modal {
 			.addButton((button) => button.setButtonText("Apply").setCta().onClick(() => this.commit()));
 	}
 
+	/**
+	 * A theme token or a font name, never both.
+	 *
+	 * Tokens follow the theme, so they resolve to something sensible on every
+	 * platform. A typed name is exact but platform-bound — Windows and macOS
+	 * ship different fonts — which is why the field takes a comma-separated
+	 * stack and says so. Obsidian exposes no way to list the fonts a device
+	 * has, so this has to be typed rather than picked.
+	 */
+	private buildTypeface(): void {
+		const stored = this.draft.fontFamily;
+		const token = isFontToken(stored) ? stored : "";
+		const custom = stored && !isFontToken(stored) ? stored : "";
+
+		let dropdown: DropdownComponent | null = null;
+		let text: TextComponent | null = null;
+
+		new Setting(this.contentEl)
+			.setName("Typeface")
+			.setDesc("Follows the fonts your theme defines, so it travels between devices.")
+			.addDropdown((component) => {
+				dropdown = component;
+				component
+					.addOptions({
+						"": "Theme default",
+						interface: "Interface",
+						text: "Text",
+						monospace: "Monospace",
+					})
+					.setValue(token)
+					.onChange((value) => {
+						text?.setValue("");
+						this.draft.fontFamily = value || undefined;
+					});
+			});
+
+		new Setting(this.contentEl)
+			.setName("Or a specific font")
+			.setDesc(
+				"Windows and macOS ship different fonts, so list fallbacks separated by commas — the first one installed wins.",
+			)
+			.addText((component) => {
+				text = component;
+				component
+					.setPlaceholder("Pretendard, Malgun Gothic, sans-serif")
+					.setValue(custom)
+					.onChange((value) => {
+						const trimmed = value.trim();
+						if (trimmed) dropdown?.setValue("");
+						this.draft.fontFamily = trimmed || undefined;
+					});
+			});
+	}
+
 	onClose(): void {
 		this.contentEl.empty();
 	}
@@ -163,6 +202,10 @@ export class FontModal extends Modal {
 		this.onSubmit(this.draft);
 		this.close();
 	}
+}
+
+function isFontToken(value: string | undefined): value is FontToken {
+	return !!value && (FONT_TOKENS as readonly string[]).includes(value);
 }
 
 function describeSize(size: number | undefined): string {

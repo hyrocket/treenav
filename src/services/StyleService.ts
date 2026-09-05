@@ -1,6 +1,6 @@
 import { TAbstractFile, TFolder, setIcon } from "obsidian";
 import { StateStore } from "../state/StateStore";
-import { FontFamily, TreeNavStyle } from "../types";
+import { FontFamily, FontToken, TreeNavStyle } from "../types";
 
 /**
  * A folder you made is a folder and looks like one. A folder TreeNav created by
@@ -13,11 +13,21 @@ import { FontFamily, TreeNavStyle } from "../types";
 const FOLDER_ICON = "folder-closed";
 
 /** Typeface tokens resolve to the running theme's own variables. */
-const FONT_STACKS: Record<FontFamily, string> = {
+const FONT_STACKS: Record<FontToken, string> = {
 	interface: "var(--font-interface)",
 	text: "var(--font-text)",
 	monospace: "var(--font-monospace)",
 };
+
+/**
+ * A stored typeface is a theme token or a font name the user typed. The value
+ * goes through the CSSOM property setter, which parses it as a font-family and
+ * ignores anything that is not one.
+ */
+export function resolveFontFamily(value: FontFamily | undefined): string {
+	if (!value) return "";
+	return FONT_STACKS[value as FontToken] ?? value;
+}
 const NOTE_ICON = "file-text";
 
 const PICTOGRAPHIC = /\p{Extended_Pictographic}/u;
@@ -70,7 +80,7 @@ export class StyleService {
 	applyToRow(rowEl: HTMLElement, path: string): void {
 		const style = this.get(path);
 		rowEl.style.color = style?.color ?? "";
-		rowEl.style.fontFamily = style?.fontFamily ? FONT_STACKS[style.fontFamily] : "";
+		rowEl.style.fontFamily = resolveFontFamily(style?.fontFamily);
 		rowEl.style.fontWeight = style?.fontWeight ?? "";
 		rowEl.style.fontStyle = style?.fontStyle ?? "";
 		rowEl.style.fontSize = style?.fontSize ? `${style.fontSize}px` : "";

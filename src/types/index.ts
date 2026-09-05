@@ -10,12 +10,19 @@ export type SortMode = "folders-first" | "files-first" | "mixed";
 /** What to do when a folder created by nesting loses its last child. */
 export type FlattenMode = "always" | "never" | "ask";
 
+/** Tokens that resolve to whatever the running theme defines. */
+export const FONT_TOKENS = ["interface", "text", "monospace"] as const;
+export type FontToken = (typeof FONT_TOKENS)[number];
+
 /**
- * A typeface is stored as a token rather than a font stack, so it follows the
- * theme the user is running and stays meaningful on a machine that has
- * different fonts installed.
+ * Either a token above, or any font stack the user typed.
+ *
+ * A token travels: it follows the theme and means the same thing on a machine
+ * with different fonts installed. A literal name does not, but nothing stops
+ * anyone from using one — CSS takes whatever it is given, and an unknown font
+ * simply falls back.
  */
-export type FontFamily = "interface" | "text" | "monospace";
+export type FontFamily = string;
 
 export type FontWeight = "normal" | "bold";
 export type FontStyle = "normal" | "italic";
@@ -27,6 +34,7 @@ export type FontStyle = "normal" | "italic";
 export interface TreeNavStyle {
 	icon?: string;
 	color?: string;
+	/** A `FontToken`, or a literal font stack. */
 	fontFamily?: FontFamily;
 	fontWeight?: FontWeight;
 	fontStyle?: FontStyle;

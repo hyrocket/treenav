@@ -844,6 +844,15 @@ if (!vaultArg) {
 		"a typeface should resolve to a theme variable",
 	);
 
+	// A typed name is passed through as written, fallbacks and all.
+	plugin.styles.update("Welcome.md", { fontFamily: "Pretendard, Malgun Gothic, sans-serif" });
+	plugin.styles.applyToRow(probe, "Welcome.md");
+	assert.equal(
+		probe.style.fontFamily.replace(/"/g, ""),
+		"Pretendard, Malgun Gothic, sans-serif",
+		"a literal font stack should reach the row untouched",
+	);
+
 	plugin.styles.clear("Welcome.md");
 
 	// The classic style is a class on the container, so it costs no re-render.
