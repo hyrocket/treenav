@@ -55,6 +55,11 @@ the look and density of the built-in file explorer.
 - Two tree styles: modern indentation, or the boxed connector lines of a
   classic tree view
 
+## Screenshots
+
+Taken in the demo vault, which `npm run demo` builds from scratch. See
+[docs/screenshots](docs/screenshots) for what goes where.
+
 ## Design notes
 
 Path-keyed state (expanded folders, styles, manual order, folders created by
