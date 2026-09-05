@@ -388,6 +388,19 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		const folder = file instanceof TFolder ? file : file.parent ?? this.app.vault.getRoot();
 		const menu = new Menu();
 
+		/*
+		 * Everyone else first, then a rule, then ours.
+		 *
+		 * The source is the core file explorer's own, because that is what this
+		 * view is: plugins gate their entries on the string, and calling
+		 * ourselves something else silently loses the ones people expect here
+		 * (version history among them). No leaf goes with it, for the same
+		 * reason the core explorer passes none — the entries that want one are
+		 * the "open beside this pane" family, which belongs to a pane menu.
+		 */
+		this.app.workspace.trigger("file-menu", menu, file, "file-explorer-context-menu", null);
+		menu.addSeparator();
+
 		if (file instanceof TFile) {
 			menu.addItem((entry) =>
 				entry
@@ -411,6 +424,16 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 			);
 		}
 
+		// What gets reached for most, right where the block begins.
+		menu.addSeparator();
+		menu.addItem((entry) =>
+			entry
+				.setTitle("Rename")
+				.setIcon("pencil")
+				.onClick(() => this.startRename(item)),
+		);
+		this.addStyleItems(menu, item);
+
 		menu.addSeparator();
 		menu.addItem((entry) =>
 			entry
@@ -424,29 +447,13 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 				.setIcon("folder-plus")
 				.onClick(() => void this.createFolder(folder)),
 		);
-
-		menu.addItem((entry) =>
-			entry
-				.setTitle("Move to…")
-				.setIcon("folder-input")
-				.onClick(() => this.promptMove(file)),
-		);
-
 		this.addResetOrderItem(menu, folder);
 
 		menu.addSeparator();
 		this.addOutlineItems(menu, item);
 
+		// Last, and alone: the one that is hard to take back.
 		menu.addSeparator();
-		this.addStyleItems(menu, item);
-
-		menu.addSeparator();
-		menu.addItem((entry) =>
-			entry
-				.setTitle("Rename")
-				.setIcon("pencil")
-				.onClick(() => this.startRename(item)),
-		);
 		menu.addItem((entry) =>
 			entry
 				.setTitle("Delete")
@@ -454,8 +461,6 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 				.onClick(() => this.confirmDelete(file)),
 		);
 
-		// Lets other plugins contribute entries, as they do for the core explorer.
-		this.app.workspace.trigger("file-menu", menu, file, "treenav", this.leaf);
 		menu.showAtMouseEvent(event);
 	}
 
@@ -529,16 +534,12 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		);
 	}
 
-	/** Keyboard- and menu-reachable alternative to dragging an item. */
-	private promptMove(file: TAbstractFile): void {
-		new FolderSuggestModal(
-			this.app,
-			(folder) => this.plugin.fileOps.checkMove(file, folder) !== null || folder === file.parent,
-			(folder) => void this.plugin.fileOps.move(file, folder),
-		).open();
-	}
-
-	/** A folder is offered if it would take any of them; the rest stay put. */
+	/**
+	 * A folder is offered if it would take any of them; the rest stay put.
+	 *
+	 * Only for a multi-row selection. One item is already covered by the core
+	 * "Move file to…", which knows nothing about a selection of several.
+	 */
 	private promptMoveAll(files: TAbstractFile[]): void {
 		new FolderSuggestModal(
 			this.app,

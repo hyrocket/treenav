@@ -1354,4 +1354,26 @@ assert.equal(foldEl.getAttribute("aria-label"), "Collapse all", "it should offer
 
 console.log("fold toggle: ok");
 
+// --- What the context menu offers, and in what order --------------------------
+
+openedMenus.length = 0;
+rowFor("Ideas/Welcome.md").dispatchEvent(new window.MouseEvent("contextmenu", { bubbles: true }));
+assert.equal(openedMenus.length, 1, "right-click should open a menu");
+
+const menuTitles = openedMenus[0].items.map((entry) => entry.title);
+assert.deepEqual(
+	menuTitles.slice(0, 5),
+	["Open", "Open in new tab", "Rename", "Set icon", "Font & color"],
+	"the menu should lead with what is reached for most",
+);
+assert.equal(menuTitles.at(-1), "Delete", "the one that is hard to take back goes last");
+assert.ok(menuTitles.includes("Outdent"), "the outline moves should still be offered");
+// The core file explorer contributes its own mover, so ours would be a second one.
+assert.ok(
+	!menuTitles.includes("Move to…"),
+	"the single-item menu should not duplicate the core mover",
+);
+
+console.log("context menu: ok");
+
 console.log("\nsmoke test passed");
