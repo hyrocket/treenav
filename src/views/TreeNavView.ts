@@ -267,6 +267,20 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		if (item) action(item);
 	}
 
+	/** Copies a file and puts the selection on the copy, ready to be renamed. */
+	async duplicate(file: TFile): Promise<void> {
+		const result = await this.plugin.fileOps.duplicate(file);
+		if (!result.ok || !result.value) return;
+
+		const item = await this.revealChanged(result.value.path);
+		if (item) this.renderer?.select(item);
+	}
+
+	/** The command form: only a file can be copied. */
+	duplicateItem(item: TreeItem): void {
+		if (item.file instanceof TFile) void this.duplicate(item.file);
+	}
+
 	newNote(): void {
 		void this.createNote(this.getTargetFolder());
 	}
@@ -448,6 +462,14 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		this.addStyleItems(menu, item);
 
 		menu.addSeparator();
+		if (file instanceof TFile) {
+			menu.addItem((entry) =>
+				entry
+					.setTitle("Make a copy")
+					.setIcon("copy")
+					.onClick(() => void this.duplicate(file)),
+			);
+		}
 		menu.addItem((entry) =>
 			entry
 				.setTitle("New note")

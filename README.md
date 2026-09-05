@@ -30,7 +30,7 @@ the look and density of the built-in file explorer.
 - Drag onto a name to place an item above or below it; that folder then keeps
   its manual order. Indenting under a note nests it the same way a drag does,
   so there is one set of rules however the move was started
-- Inline rename, new note / new folder, **Move to…**, delete via trash
+- Inline rename, new note / new folder, **Make a copy**, delete via trash
 - Drag, move, style or delete a whole selection at once; a target that suits
   only some of them takes those and leaves the rest where they are
 - Works the same on a phone: press and hold a row, then move to drag it or let

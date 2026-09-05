@@ -557,6 +557,15 @@ const app = {
 			emit("create", folder);
 			return folder;
 		},
+		copy: async (file, newPath) => {
+			const slash = newPath.lastIndexOf("/");
+			const parent = slash === -1 ? root : folderAt(newPath.slice(0, slash));
+			const copy = new TFile(newPath, parent);
+			parent.children.push(copy);
+			byPath.set(newPath, copy);
+			emit("create", copy);
+			return copy;
+		},
 	},
 	fileManager: {
 		renameFile: async (file, newPath) => {
@@ -1403,5 +1412,20 @@ const note = view.renderer.getItem("Ideas/Welcome.md") ?? view.renderer.getVisib
 note.rowEl.dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true }));
 
 console.log("double click: ok");
+
+// --- Making a copy -----------------------------------------------------------
+//
+// The core explorer offers this but fills its own menu before firing the event
+// other menus listen to, so it has to be rebuilt rather than inherited.
+
+const original = byPath.get("Ideas/Welcome.md") ?? byPath.get("Welcome.md");
+assert.ok(original, "the note to copy is missing");
+const copied = await plugin.fileOps.duplicate(original);
+assert.ok(copied.ok, "the copy should have been made");
+assert.equal(copied.value.parent.path, original.parent.path, "a copy belongs beside its original");
+assert.notEqual(copied.value.path, original.path, "a copy needs a name of its own");
+assert.ok(copied.value.name.endsWith(".md"), "the extension should be kept");
+
+console.log("make a copy: ok");
 
 console.log("\nsmoke test passed");

@@ -111,6 +111,11 @@ export default class TreeNavPlugin extends Plugin {
 				run: (view) => view.toggleFold(),
 			},
 			{
+				id: "duplicate",
+				name: "Make a copy",
+				run: onSelection((view, item) => view.duplicateItem(item)),
+			},
+			{
 				id: "rename",
 				name: "Rename item",
 				run: onSelection((view, item) => view.renameItem(item)),

@@ -54,6 +54,28 @@ export class FileOpsService {
 		}
 	}
 
+	/**
+	 * A second copy beside the original, named the way a new note would be.
+	 *
+	 * The core file explorer offers this, but it fills its own menu before it
+	 * fires the event other menus listen to, so the entry cannot be inherited —
+	 * only rebuilt.
+	 */
+	async duplicate(file: TFile): Promise<OpResult<TFile>> {
+		const parent = file.parent;
+		if (!parent) return this.fail("Cannot copy a file outside the vault.");
+
+		const extension = file.extension ? `.${file.extension}` : "";
+		const name = this.uniqueName(parent, file.basename, extension);
+
+		try {
+			const copy = await this.app.vault.copy(file, normalizePath(joinPath(parent.path, name)));
+			return { ok: true, value: copy };
+		} catch (error) {
+			return this.fail(`Could not copy "${file.name}": ${describe(error)}`);
+		}
+	}
+
 	async createFolder(parent: TFolder, baseName = "New folder"): Promise<OpResult<TFolder>> {
 		const name = this.uniqueName(parent, baseName, "");
 		try {
