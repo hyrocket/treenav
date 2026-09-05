@@ -11,7 +11,9 @@
 		"deploy": "node scripts/deploy.mjs",
 		"build:deploy": "npm run build && node scripts/deploy.mjs",
 		"reset": "node scripts/reset-test-vault.mjs",
-		"smoke": "node scripts/smoke-test.mjs"
+		"smoke": "node scripts/smoke-test.mjs",
+		"bench": "node scripts/smoke-test.mjs --bench 1000 && node scripts/smoke-test.mjs --bench 5000 && node scripts/smoke-test.mjs --bench 20000",
+		"make-vault": "node scripts/make-vault.mjs"
 	},
 	"keywords": [
 		"obsidian",

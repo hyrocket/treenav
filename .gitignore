@@ -10,4 +10,7 @@ data.json
 # Disposable fixture; `npm run reset` recreates it
 test-vault/
 
+# Disposable measuring vault; `npm run make-vault` recreates it
+bench-vault/
+
 .DS_Store

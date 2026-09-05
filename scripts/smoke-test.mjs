@@ -446,7 +446,11 @@ function scanVault(dir, prefix = "") {
 const vaultArg = argValue("--vault");
 const dataArg = argValue("--data");
 
-const spec = vaultArg
+const benchArg = argValue("--bench");
+
+const spec = benchArg
+	? syntheticSpec(Number(benchArg))
+	: vaultArg
 	? scanVault(vaultArg)
 	: [
 			"Welcome.md",
@@ -463,9 +467,124 @@ const spec = vaultArg
 
 const { root, byPath } = buildVault(spec);
 
+/**
+ * A vault of `count` notes in a shape a real one tends to have: a few dozen
+ * top-level folders, three levels deep, a dozen notes in each leaf, and a
+ * folder note here and there.
+ */
+function syntheticSpec(count) {
+	const paths = [];
+	const TOP = 24;
+	const MID = 4;
+	const SUB = 3;
+	// Spread over the whole shape rather than filling the first branch deep.
+	const perLeaf = Math.max(1, Math.ceil(count / (TOP * MID * SUB)));
+
+	outer: for (let a = 0; a < TOP; a += 1) {
+		const top = `Area ${pad(a)}`;
+		paths.push(`${top}/${top}.md`);
+		for (let b = 0; b < MID; b += 1) {
+			const mid = `${top}/Project ${pad(b)}`;
+			for (let c = 0; c < SUB; c += 1) {
+				const leaf = `${mid}/Part ${pad(c)}`;
+				for (let n = 0; n < perLeaf; n += 1) {
+					paths.push(`${leaf}/Note ${pad(n)} in ${top}.md`);
+					if (paths.length >= count) break outer;
+				}
+			}
+		}
+	}
+	return paths;
+}
+
+function pad(n) {
+	return String(n).padStart(2, "0");
+}
+
 function argValue(flag) {
 	const index = process.argv.indexOf(flag);
 	return index === -1 ? undefined : process.argv[index + 1];
+}
+
+/**
+ * What the tree costs at a given size.
+ *
+ * jsdom is far slower at building DOM than the browser Obsidian runs on, so
+ * these numbers are an upper bound rather than a prediction. What they are for
+ * is the shape: run two sizes and see whether the cost follows the file count
+ * or the square of it.
+ */
+function runBench() {
+	const files = [...byPath.values()].filter((f) => !(f instanceof TFolder)).length;
+	const folders = [...byPath.values()].filter((f) => f instanceof TFolder).length - 1;
+
+	const time = (label, fn) => {
+		const started = performance.now();
+		const detail = fn();
+		const ms = performance.now() - started;
+		results.push({ what: label, ms: Number(ms.toFixed(1)), detail: detail ?? "" });
+	};
+
+	const results = [];
+	const renderer = view.renderer;
+
+	time("render collapsed", () => {
+		view.rebuild();
+		return `${countRows()} rows`;
+	});
+
+	time("expand every folder", () => {
+		renderer.expandAll();
+		return `${countRows()} rows`;
+	});
+
+	time("walk for the fold button", () => {
+		for (let i = 0; i < 20; i += 1) renderer.hasExpanded();
+		return "x20";
+	});
+
+	time("list the visible rows", () => {
+		for (let i = 0; i < 20; i += 1) renderer.getVisibleItems();
+		return "x20";
+	});
+
+	time("sort one folder", () => {
+		const folder = byPath.get("Area 00/Project 00/Part 00");
+		for (let i = 0; i < 200; i += 1) plugin.treeService.getVisibleChildren(folder);
+		return "x200";
+	});
+
+	time("refresh one folder", () => {
+		view.refreshFolder("Area 00/Project 00/Part 00");
+		renderer.flush();
+		return "";
+	});
+
+	time("match every name", () => {
+		let hits = 0;
+		for (let i = 0; i < 10; i += 1) {
+			hits = 0;
+			for (const file of byPath.values()) {
+				if (file.name.toLowerCase().includes("note 07")) hits += 1;
+			}
+		}
+		return `${hits} hits x10`;
+	});
+
+	time("collapse everything", () => {
+		renderer.collapseAll();
+		return `${countRows()} rows`;
+	});
+
+	console.log(`\nvault: ${files} files, ${folders} folders\n`);
+	for (const row of results) {
+		console.log(`  ${row.what.padEnd(26)} ${String(row.ms).padStart(8)} ms   ${row.detail}`);
+	}
+	console.log("");
+}
+
+function countRows() {
+	return content.querySelectorAll(".treenav-item-self").length;
 }
 
 /** Enough of a mutable vault to exercise the move / nest operations for real. */
@@ -725,6 +844,12 @@ openLeaves.push(leaf);
 await view.onOpen();
 
 const content = view.containerEl.children[1];
+
+if (benchArg) {
+	runBench();
+	process.exit(0);
+}
+
 const rows = [...content.querySelectorAll(".treenav-item-self")];
 const titles = rows.map((r) => r.querySelector(".treenav-item-title")?.textContent);
 
