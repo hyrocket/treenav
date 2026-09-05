@@ -543,7 +543,6 @@ if (dataArg && existsSync(dataArg)) {
 	// Expand the whole fixture so hiding and nesting are actually exercised.
 	plugin.data = {
 		version: 1,
-		settings: {},
 		expandedFolders: [
 			"Projects",
 			"Projects/Sixtoms",
@@ -553,6 +552,8 @@ if (dataArg && existsSync(dataArg)) {
 			"Archive/2024",
 			"Archive/2024/Q1",
 		],
+		// Written by an older version, when this setting was a boolean.
+		settings: { flattenNestedFolders: true },
 		styles: { "Archive/2024": { icon: "lucide-folder", color: "var(--color-red)" } },
 		// Sixtoms is alphabetically after RE100; a manual order must win.
 		order: { "Projects/Sixtoms": 0, "Projects/RE100": 1 },
@@ -607,14 +608,20 @@ if (!vaultArg) {
 		"a folder's manual order should override the sort setting",
 	);
 
-	// Folders and notes look the same until something is nested under them.
-	const folderIcon = content
-		.querySelector('[data-path="Projects"] .treenav-item-icon .svg-icon')
-		?.getAttribute("data-icon");
-	const fileIcon = content
-		.querySelector('[data-path="Welcome.md"] .treenav-item-icon .svg-icon')
-		?.getAttribute("data-icon");
-	assert.equal(folderIcon, fileIcon, "folders and notes should share the default icon");
+	// A folder you made looks like a folder; a note looks like a note.
+	const iconOf = (path) =>
+		content
+			.querySelector(`[data-path="${path}"] .treenav-item-icon .svg-icon`)
+			?.getAttribute("data-icon");
+	assert.equal(iconOf("Projects"), "folder", "a plain folder should show the folder icon");
+	assert.equal(iconOf("Welcome.md"), "file-text", "a note should show the note icon");
+
+	// The boolean this setting used to be must survive the upgrade.
+	assert.equal(
+		plugin.state.settings.flattenNestedFolders,
+		"ask",
+		"the legacy boolean should migrate to a mode",
+	);
 
 	// A folder holding nothing but its own folder note has no arrow to offer.
 	const emptyFolder = content.querySelector('[data-path="빈 폴더"]')?.parentElement;
@@ -691,7 +698,35 @@ if (!vaultArg) {
 	plugin.styles.update("Projects/Sixtoms/Planning", { color: "var(--color-blue)", fontSize: 17 });
 	plugin.state.setOrder(["Projects/Sixtoms/Marketing.md", "Projects/Sixtoms/Planning"]);
 
+	// A folder that came from nesting keeps the note icon: it is still that note.
+	// Checked on a folder with no icon of its own, since a custom icon always wins.
+	const defaultIconFor = (file) => {
+		const el = document.createElement("div");
+		plugin.styles.applyToIcon(el, file);
+		return el.querySelector(".svg-icon")?.getAttribute("data-icon");
+	};
+	const ideas = byPath.get("Ideas");
+	assert.equal(defaultIconFor(ideas), "folder", "a plain folder shows the folder icon");
+	plugin.state.markNested("Ideas");
+	assert.equal(defaultIconFor(ideas), "file-text", "a nested folder keeps the note icon");
+	plugin.state.unmarkNested("Ideas");
+
+	// Asking is the default, and declining must leave the vault alone.
+	plugin.state.settings.flattenNestedFolders = "ask";
+	plugin.state.markNested("Projects/Sixtoms/Planning");
+	plugin.folderNotes.askFlatten = async () => "keep";
+	await plugin.fileOps.move(byPath.get("Projects/Sixtoms/Planning/Welcome.md"), root);
+	await new Promise((resolve) => setTimeout(resolve, 5));
+	assert.ok(
+		byPath.get("Projects/Sixtoms/Planning") instanceof TFolder,
+		"declining the prompt must keep the folder",
+	);
+	console.log("prompt declined: ok");
+
 	// Pulling the last child back out undoes the nesting entirely.
+	plugin.state.settings.flattenNestedFolders = "always";
+	plugin.folderNotes.askFlatten = null;
+	await plugin.fileOps.move(byPath.get("Welcome.md"), byPath.get("Projects/Sixtoms/Planning"));
 	plugin.state.markNested("Projects/Sixtoms/Planning");
 	await plugin.fileOps.move(byPath.get("Projects/Sixtoms/Planning/Welcome.md"), root);
 	plugin.folderNotes.flattenIfEmptied("Projects/Sixtoms/Planning");

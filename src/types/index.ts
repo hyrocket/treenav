@@ -4,6 +4,9 @@ export const TREENAV_ICON = "list-tree";
 /** How siblings are ordered inside a folder. */
 export type SortMode = "folders-first" | "files-first" | "mixed";
 
+/** What to do when a folder created by nesting loses its last child. */
+export type FlattenMode = "always" | "never" | "ask";
+
 export type FontWeight = "normal" | "bold";
 export type FontStyle = "normal" | "italic";
 
@@ -36,10 +39,10 @@ export interface TreeNavSettings {
 	/** Draw a default icon on items with no icon of their own. */
 	showDefaultIcons: boolean;
 	/**
-	 * Turn a folder TreeNav created by nesting back into a plain note once its
-	 * last child leaves.
+	 * What happens when a folder TreeNav created by nesting loses its last
+	 * child: fold it back into a note, leave it alone, or ask.
 	 */
-	flattenNestedFolders: boolean;
+	flattenNestedFolders: FlattenMode;
 }
 
 export const DEFAULT_SETTINGS: TreeNavSettings = {
@@ -51,7 +54,7 @@ export const DEFAULT_SETTINGS: TreeNavSettings = {
 	rememberExpandedFolders: true,
 	confirmDelete: true,
 	showDefaultIcons: true,
-	flattenNestedFolders: true,
+	flattenNestedFolders: "ask",
 };
 
 /**

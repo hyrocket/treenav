@@ -1,6 +1,12 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type TreeNavPlugin from "../main";
-import { SortMode } from "../types";
+import { FlattenMode, SortMode } from "../types";
+
+const FLATTEN_LABELS: Record<FlattenMode, string> = {
+	ask: "Ask each time",
+	always: "Turn it back into a note",
+	never: "Keep the folder",
+};
 
 const SORT_LABELS: Record<SortMode, string> = {
 	"folders-first": "Folders first",
@@ -111,15 +117,18 @@ export class TreeNavSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Undo nesting automatically")
+			.setName("When a nested folder loses its last child")
 			.setDesc(
-				"When a folder TreeNav created by dropping a note onto another loses its last child, turn it back into a plain note and move the empty folder to the trash. Folders you made yourself are never affected.",
+				"Dropping a note onto another turns the target into a folder. This is what happens when that folder is later left with nothing but its own note. Folders you made yourself are never affected.",
 			)
-			.addToggle((toggle) =>
-				toggle.setValue(settings.flattenNestedFolders).onChange(async (value) => {
-					settings.flattenNestedFolders = value;
-					await commit(false);
-				}),
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOptions(FLATTEN_LABELS)
+					.setValue(settings.flattenNestedFolders)
+					.onChange(async (value) => {
+						settings.flattenNestedFolders = value as FlattenMode;
+						await commit(false);
+					}),
 			);
 
 		new Setting(containerEl).setName("Behavior").setHeading();

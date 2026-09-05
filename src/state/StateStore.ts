@@ -2,11 +2,25 @@ import { debounce } from "obsidian";
 import {
 	DATA_VERSION,
 	DEFAULT_SETTINGS,
+	FlattenMode,
 	TreeNavData,
 	TreeNavSettings,
 	TreeNavStyle,
 } from "../types";
 import { isSameOrDescendant, parentPath, remapPath } from "./paths";
+
+/**
+ * `flattenNestedFolders` used to be a boolean. `true` becomes "ask" rather than
+ * "always": the boolean could not express a confirmation step, and asking is
+ * the safer reading of "yes, flattening is allowed".
+ */
+function normalizeSettings(settings: TreeNavSettings): TreeNavSettings {
+	const flatten = settings.flattenNestedFolders as FlattenMode | boolean;
+	if (typeof flatten === "boolean") {
+		settings.flattenNestedFolders = flatten ? "ask" : "never";
+	}
+	return settings;
+}
 
 interface PersistHost {
 	loadData(): Promise<unknown>;
@@ -36,7 +50,7 @@ export class StateStore {
 		const raw = (await this.host.loadData()) as Partial<TreeNavData> | null;
 		if (!raw) return;
 
-		this.settings = { ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) };
+		this.settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) });
 		if (this.settings.rememberExpandedFolders && Array.isArray(raw.expandedFolders)) {
 			this.expanded = new Set(raw.expandedFolders);
 		}

@@ -1,17 +1,15 @@
-import { TAbstractFile, setIcon } from "obsidian";
+import { TAbstractFile, TFolder, setIcon } from "obsidian";
 import { StateStore } from "../state/StateStore";
 import { TreeNavStyle } from "../types";
 
 /**
- * One icon for folders and notes alike.
- *
- * Nesting a note under another turns the target into a folder, and pulling the
- * child back out leaves the folder behind. With separate folder and note icons
- * that round trip looks like the note became something else and then an empty
- * folder; with one icon it simply looks like the note it still is. Whether an
- * item holds anything is expressed by the collapse arrow instead.
+ * A folder you made is a folder and looks like one. A folder TreeNav created by
+ * nesting is really a note that gained children, so it keeps the note icon —
+ * that way the round trip of nesting and un-nesting never makes a note appear
+ * to become something else and then an empty folder.
  */
-const DEFAULT_ICON = "file-text";
+const FOLDER_ICON = "folder";
+const NOTE_ICON = "file-text";
 
 /**
  * Per-item appearance: icon, colour and font overrides.
@@ -64,6 +62,8 @@ export class StyleService {
 
 		iconEl.addClass("treenav-is-default-icon");
 		if (!this.state.settings.showDefaultIcons) return;
-		setIcon(iconEl, DEFAULT_ICON);
+
+		const isRealFolder = file instanceof TFolder && !this.state.isNested(file.path);
+		setIcon(iconEl, isRealFolder ? FOLDER_ICON : NOTE_ICON);
 	}
 }

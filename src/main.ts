@@ -1,4 +1,5 @@
 import { Plugin, TFile, TFolder, WorkspaceLeaf } from "obsidian";
+import { FlattenDecision, FlattenPromptModal } from "./components/FlattenPromptModal";
 import { DragDropService } from "./services/DragDropService";
 import { FileOpsService } from "./services/FileOpsService";
 import { FolderNoteService } from "./services/FolderNoteService";
@@ -23,6 +24,7 @@ export default class TreeNavPlugin extends Plugin {
 		await this.state.load();
 
 		this.folderNotes = new FolderNoteService(this.app, this.state);
+		this.folderNotes.askFlatten = (folder) => this.promptFlatten(folder);
 		this.fileOps = new FileOpsService(this.app);
 		this.treeService = new TreeService(this.state, this.folderNotes);
 		this.dnd = new DragDropService(this.app, this.fileOps, this.treeService, this.state);
@@ -60,6 +62,22 @@ export default class TreeNavPlugin extends Plugin {
 		}
 
 		await workspace.revealLeaf(leaf);
+	}
+
+	/**
+	 * Asks whether an emptied nested folder should fold back into a note, and
+	 * records the answer when the user does not want to be asked again.
+	 */
+	private promptFlatten(folder: TFolder): Promise<FlattenDecision> {
+		return new Promise((resolve) => {
+			new FlattenPromptModal(this.app, folder.name, (decision, remember) => {
+				if (remember) {
+					this.state.settings.flattenNestedFolders = decision === "flatten" ? "always" : "never";
+					void this.state.save();
+				}
+				resolve(decision);
+			}).open();
+		});
 	}
 
 	/** Forces a full re-render of every open TreeNav view. */

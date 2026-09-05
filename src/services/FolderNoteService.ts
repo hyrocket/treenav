@@ -1,5 +1,7 @@
 import { App, Notice, TFile, TFolder } from "obsidian";
+import { FlattenDecision } from "../components/FlattenPromptModal";
 import { StateStore } from "../state/StateStore";
+import { FlattenMode } from "../types";
 import { joinPath, parentPath } from "../state/paths";
 
 /**
@@ -12,6 +14,12 @@ import { joinPath, parentPath } from "../state/paths";
  * folder itself is renamed.
  */
 export class FolderNoteService {
+	/**
+	 * Asks the user whether to flatten. Set by the plugin; without it the
+	 * "ask" mode simply keeps the folder.
+	 */
+	askFlatten: ((folder: TFolder) => Promise<FlattenDecision>) | null = null;
+
 	/** Folders currently being flattened, so a triggered event cannot re-enter. */
 	private readonly flattening = new Set<string>();
 
@@ -129,26 +137,57 @@ export class FolderNoteService {
 	 * rather than deleting it, because there is no undo for file operations.
 	 */
 	flattenIfEmptied(folderPath: string): void {
-		if (!this.state.settings.flattenNestedFolders) return;
-		if (!this.state.isNested(folderPath)) return;
+		const mode = this.state.settings.flattenNestedFolders;
+		if (mode === "never") return;
 		if (this.flattening.has(folderPath)) return;
-
-		const folder = this.app.vault.getAbstractFileByPath(folderPath);
-		if (!(folder instanceof TFolder) || folder.isRoot()) return;
-
-		const note = this.getFolderNote(folder);
-		if (!note) return;
-		// Every remaining child counts, including ones the tree does not show.
-		if (folder.children.length !== 1 || folder.children[0] !== note) return;
-
-		const parent = folder.parent;
-		if (!parent) return;
-
-		const targetPath = joinPath(parent.path, note.name);
-		if (this.app.vault.getAbstractFileByPath(targetPath)) return;
+		if (!this.flattenTarget(folderPath)) return;
 
 		this.flattening.add(folderPath);
-		window.setTimeout(() => void this.flatten(folder, note, targetPath, folderPath), 0);
+		window.setTimeout(() => void this.resolveFlatten(folderPath, mode), 0);
+	}
+
+	/**
+	 * Everything the flatten needs, or `null` when it must not happen. Called
+	 * again after the prompt, because the vault can move on while a modal is
+	 * open.
+	 */
+	private flattenTarget(
+		folderPath: string,
+	): { folder: TFolder; note: TFile; targetPath: string } | null {
+		if (!this.state.isNested(folderPath)) return null;
+
+		const folder = this.app.vault.getAbstractFileByPath(folderPath);
+		if (!(folder instanceof TFolder) || folder.isRoot()) return null;
+
+		const note = this.getFolderNote(folder);
+		if (!note) return null;
+		// Every remaining child counts, including ones the tree does not show.
+		if (folder.children.length !== 1 || folder.children[0] !== note) return null;
+
+		const parent = folder.parent;
+		if (!parent) return null;
+
+		const targetPath = joinPath(parent.path, note.name);
+		if (this.app.vault.getAbstractFileByPath(targetPath)) return null;
+
+		return { folder, note, targetPath };
+	}
+
+	private async resolveFlatten(folderPath: string, mode: FlattenMode): Promise<void> {
+		try {
+			if (mode === "ask") {
+				const pending = this.flattenTarget(folderPath);
+				if (!pending) return;
+				const decision = this.askFlatten ? await this.askFlatten(pending.folder) : "keep";
+				if (decision === "keep") return;
+			}
+
+			const target = this.flattenTarget(folderPath);
+			if (!target) return;
+			await this.flatten(target.folder, target.note, target.targetPath, folderPath);
+		} finally {
+			this.flattening.delete(folderPath);
+		}
 	}
 
 	private async flatten(
@@ -167,8 +206,6 @@ export class FolderNoteService {
 			this.state.unmarkNested(trackedPath);
 		} catch (error) {
 			new Notice(`TreeNav: could not restore "${note.basename}" — ${describe(error)}`);
-		} finally {
-			this.flattening.delete(trackedPath);
 		}
 	}
 
