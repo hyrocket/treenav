@@ -100,8 +100,9 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 	/** Switches between flat indentation and classic connector lines. */
 	applyTreeStyle(): void {
-		const classic = this.plugin.state.settings.treeStyle === "classic";
-		this.treeEl?.toggleClass("treenav-style-classic", classic);
+		const style = this.plugin.state.settings.treeStyle;
+		this.treeEl?.toggleClass("treenav-style-classic", style !== "modern");
+		this.treeEl?.toggleClass("treenav-lines-solid", style === "classic-solid");
 	}
 
 	/** Re-renders one folder's listing, for changes no vault event reports. */

@@ -351,6 +351,13 @@ input.treenav-rename-input {
 	background-size: 1px 2px;
 }
 
+/* A hairline instead of dots: steadier wherever the display is not at 100%. */
+.treenav-style-classic.treenav-lines-solid .treenav-item::before,
+.treenav-style-classic.treenav-lines-solid .treenav-item-self::before {
+	background-image: none;
+	background-color: var(--treenav-line);
+}
+
 /* The last child ends the line at its own row rather than carrying it on. */
 .treenav-style-classic .treenav-item:last-child::before {
 	bottom: auto;

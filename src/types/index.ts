@@ -1,8 +1,12 @@
 export const TREENAV_VIEW_TYPE = "treenav-view";
 export const TREENAV_ICON = "list-tree";
 
-/** How the tree draws depth: flat indentation, or classic connector lines. */
-export type TreeStyle = "modern" | "classic";
+/**
+ * How the tree draws depth. The two classic variants differ only in the line:
+ * dots are traditional, but a hairline holds up better on a display that is
+ * not at 100% scaling, where a 1px dot pattern starts to shimmer.
+ */
+export type TreeStyle = "modern" | "classic" | "classic-solid";
 
 /** How siblings are ordered inside a folder. */
 export type SortMode = "folders-first" | "files-first" | "mixed";

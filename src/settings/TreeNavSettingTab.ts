@@ -4,7 +4,8 @@ import { FlattenMode, SortMode, TreeStyle } from "../types";
 
 const TREE_STYLE_LABELS: Record<TreeStyle, string> = {
 	modern: "Modern",
-	classic: "Classic",
+	"classic-solid": "Classic — solid lines",
+	classic: "Classic — dotted lines",
 };
 
 const FLATTEN_LABELS: Record<FlattenMode, string> = {
@@ -119,7 +120,7 @@ export class TreeNavSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Tree style")
 			.setDesc(
-				"Modern uses plain indentation with a light guide. Classic draws the boxed connector lines of a traditional tree view.",
+				"Modern uses plain indentation with a light guide. Classic draws the boxed connector lines of a traditional tree view — solid lines stay crisp at any display scaling, dotted ones are closer to the original.",
 			)
 			.addDropdown((dropdown) =>
 				dropdown
