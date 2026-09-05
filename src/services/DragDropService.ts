@@ -1,8 +1,7 @@
 import { App, TAbstractFile, TFile, TFolder } from "obsidian";
-import { StateStore } from "../state/StateStore";
 import { isSameOrDescendant } from "../state/paths";
 import { FileOpsService } from "./FileOpsService";
-import { TreeService } from "./TreeService";
+import { OutlineService } from "./OutlineService";
 
 const MIME = "application/x-treenav-path";
 const DWELL_MS = 600;
@@ -34,17 +33,13 @@ export interface DropTargetRow {
  * silently hands the drop to an ancestor.
  */
 export class DragDropService {
-	/** Called with the folder whose listing changed, when no vault event will fire. */
-	onOrderChanged: ((folderPath: string) => void) | null = null;
-
 	private source: TAbstractFile | null = null;
 	private indicated: DropTargetRow | null = null;
 
 	constructor(
 		private readonly app: App,
 		private readonly fileOps: FileOpsService,
-		private readonly tree: TreeService,
-		private readonly state: StateStore,
+		private readonly outline: OutlineService,
 	) {}
 
 	makeDraggable(el: HTMLElement, getFile: () => TAbstractFile): void {
@@ -209,58 +204,18 @@ export class DragDropService {
 
 	// --- Execution ---------------------------------------------------------
 
+	/** A drop means the same thing as the matching keyboard move. */
 	private async execute(source: TAbstractFile, target: TAbstractFile, mode: DropMode): Promise<void> {
-		if (mode === "into") {
-			await this.fileOps.move(source, target as TFolder);
-			return;
+		switch (mode) {
+			case "into":
+				await this.fileOps.move(source, target as TFolder);
+				return;
+			case "nest":
+				await this.outline.nestUnder(source, target as TFile);
+				return;
+			default:
+				await this.outline.placeNextTo(source, target, mode);
 		}
-
-		if (mode === "nest") {
-			const note = target as TFile;
-			const result = await this.fileOps.nestUnder(source, note);
-			if (result.ok && result.value) {
-				const { folder, created } = result.value;
-				if (created) {
-					// Only a folder TreeNav conjured out of a note may be undone later.
-					this.state.markNested(folder.path);
-					// The folder's row now stands exactly where the note's row was,
-					// so it takes over the note's position and appearance.
-					this.state.inherit(note.path, folder.path);
-				}
-				this.state.setExpanded(folder.path, true);
-				this.onOrderChanged?.(folder.path);
-			}
-			return;
-		}
-
-		await this.reorder(source, target, mode);
-	}
-
-	/**
-	 * Places `source` next to `target`, moving it into the target's folder first
-	 * when it comes from elsewhere. The new order is taken from what the tree is
-	 * currently showing, so the result matches what the user saw.
-	 */
-	private async reorder(
-		source: TAbstractFile,
-		target: TAbstractFile,
-		mode: "before" | "after",
-	): Promise<void> {
-		const parent = target.parent;
-		if (!parent) return;
-
-		if (source.parent !== parent) {
-			const moved = await this.fileOps.move(source, parent);
-			if (!moved.ok) return;
-		}
-
-		const siblings = this.tree.getVisibleChildren(parent).filter((file) => file !== source);
-		const index = siblings.indexOf(target);
-		if (index === -1) return;
-
-		siblings.splice(mode === "before" ? index : index + 1, 0, source);
-		this.state.setOrder(siblings.map((file) => file.path));
-		this.onOrderChanged?.(parent.path);
 	}
 
 	// --- Indicator ---------------------------------------------------------

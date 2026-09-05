@@ -333,6 +333,7 @@ const spec = vaultArg
 			"Projects/Projects.md",
 			"Projects/Sixtoms/Sixtoms.md",
 			"Projects/Sixtoms/Planning.md",
+			"Projects/Sixtoms/Marketing.md",
 			"Projects/RE100/Meeting.md",
 			"Ideas/Ideas.md",
 			"Archive/2024/Q1/Old note.md",
@@ -765,6 +766,54 @@ if (!vaultArg) {
 	assert.ok(byPath.get("Ideas/Ideas.md"), "its folder note must stay put");
 
 	console.log("user folder untouched: ok");
+
+	// --- Outline moves -------------------------------------------------------
+
+	const namesIn = (path) =>
+		plugin.treeService.getVisibleChildren(byPath.get(path)).map((f) => f.name);
+
+	const sixtoms = "Projects/Sixtoms";
+	assert.deepEqual(namesIn(sixtoms), ["Marketing.md", "Planning.md"], "fixture assumption broke");
+
+	plugin.outline.moveStep(byPath.get("Projects/Sixtoms/Planning.md"), -1);
+	assert.deepEqual(namesIn(sixtoms), ["Planning.md", "Marketing.md"], "move up did not take");
+
+	plugin.outline.moveToEdge(byPath.get("Projects/Sixtoms/Planning.md"), "bottom");
+	assert.deepEqual(namesIn(sixtoms), ["Marketing.md", "Planning.md"], "move to bottom did not take");
+
+	// Indenting under the note above nests it, exactly as the drag would.
+	await plugin.outline.indent(byPath.get("Projects/Sixtoms/Planning.md"));
+	assert.equal(
+		byPath.get("Projects/Sixtoms/Marketing/Planning.md")?.parent?.path,
+		"Projects/Sixtoms/Marketing",
+		"indent should nest under the item above",
+	);
+	assert.ok(
+		plugin.state.isNested("Projects/Sixtoms/Marketing"),
+		"a folder made by indenting should be undoable like a nest",
+	);
+
+	// Outdenting puts it back beside its former parent.
+	await plugin.outline.outdent(byPath.get("Projects/Sixtoms/Marketing/Planning.md"));
+	assert.equal(
+		byPath.get("Projects/Sixtoms/Planning.md")?.parent?.path,
+		sixtoms,
+		"outdent should lift the item to its grandparent",
+	);
+	assert.deepEqual(
+		namesIn(sixtoms),
+		["Marketing", "Planning.md"],
+		"outdent should land directly after the former parent",
+	);
+
+	// The first item has nothing above it, and the top level has nowhere to go.
+	const before = namesIn(sixtoms);
+	await plugin.outline.indent(byPath.get("Projects/Sixtoms/Marketing"));
+	await plugin.outline.outdent(byPath.get("Welcome.md"));
+	assert.deepEqual(namesIn(sixtoms), before, "the first item must not indent");
+	assert.equal(byPath.get("Welcome.md")?.parent?.path, "/", "a root item must not outdent");
+
+	console.log("outline moves: ok");
 }
 
 console.log("\nsmoke test passed");

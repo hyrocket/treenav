@@ -19,6 +19,7 @@ import { TreeItem } from "../components/TreeItem";
 import { TreeRenderer, TreeRendererHost } from "../components/TreeRenderer";
 import { parentPath } from "../state/paths";
 import { TREENAV_ICON, TREENAV_VIEW_TYPE, TreeNavStyle } from "../types";
+import { OutlineEdge } from "../services/OutlineService";
 import { TreeKeymap, TreeKeymapActions } from "./TreeKeymap";
 
 export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeymapActions {
@@ -181,6 +182,57 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		void this.createFolder(folder);
 	}
 
+	moveStep(item: TreeItem, delta: -1 | 1): void {
+		this.runOutline(item, () => this.plugin.outline.moveStep(item.file, delta));
+	}
+
+	moveToEdge(item: TreeItem, edge: OutlineEdge): void {
+		this.runOutline(item, () => this.plugin.outline.moveToEdge(item.file, edge));
+	}
+
+	indentItem(item: TreeItem): void {
+		this.runOutline(item, () => this.plugin.outline.indent(item.file));
+	}
+
+	outdentItem(item: TreeItem): void {
+		this.runOutline(item, () => this.plugin.outline.outdent(item.file));
+	}
+
+	// --- Commands ----------------------------------------------------------
+
+	/** True while this view holds keyboard focus; gates the plugin's commands. */
+	hasFocus(): boolean {
+		return !!this.treeEl && this.treeEl.contains(document.activeElement);
+	}
+
+	/** Runs `action` on the selected row, if there is one. */
+	withSelected(action: (item: TreeItem) => void): void {
+		const item = this.renderer?.getSelected();
+		if (item) action(item);
+	}
+
+	newNote(): void {
+		void this.createNote(this.getTargetFolder());
+	}
+
+	newFolder(): void {
+		void this.createFolder(this.getTargetFolder());
+	}
+
+	/**
+	 * Runs a move, then puts the selection back on the item wherever it landed.
+	 * `file` is mutated in place by a move, so its path is current afterwards.
+	 */
+	private runOutline(item: TreeItem, run: () => void | Promise<void>): void {
+		const file = item.file;
+		void (async () => {
+			await run();
+			const moved = await this.revealChanged(file.path);
+			if (moved) this.renderer?.select(moved);
+			this.treeEl?.focus();
+		})();
+	}
+
 	// --- TreeRendererHost --------------------------------------------------
 
 	onItemClick(item: TreeItem, event: MouseEvent): void {
@@ -265,6 +317,9 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		this.addResetOrderItem(menu, folder);
 
 		menu.addSeparator();
+		this.addOutlineItems(menu, item);
+
+		menu.addSeparator();
 		this.addStyleItems(menu, item);
 
 		menu.addSeparator();
@@ -284,6 +339,26 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		// Lets other plugins contribute entries, as they do for the core explorer.
 		this.app.workspace.trigger("file-menu", menu, file, "treenav", this.leaf);
 		menu.showAtMouseEvent(event);
+	}
+
+	/** The keyboard moves, spelled out for people who reach for the mouse. */
+	private addOutlineItems(menu: Menu, item: TreeItem): void {
+		const moves: { title: string; icon: string; run: () => void }[] = [
+			{ title: "Move up", icon: "chevron-up", run: () => this.moveStep(item, -1) },
+			{ title: "Move down", icon: "chevron-down", run: () => this.moveStep(item, 1) },
+			{ title: "Move to top", icon: "chevrons-up", run: () => this.moveToEdge(item, "top") },
+			{
+				title: "Move to bottom",
+				icon: "chevrons-down",
+				run: () => this.moveToEdge(item, "bottom"),
+			},
+			{ title: "Indent", icon: "indent-increase", run: () => this.indentItem(item) },
+			{ title: "Outdent", icon: "indent-decrease", run: () => this.outdentItem(item) },
+		];
+
+		for (const move of moves) {
+			menu.addItem((entry) => entry.setTitle(move.title).setIcon(move.icon).onClick(move.run));
+		}
 	}
 
 	/**
@@ -315,6 +390,27 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 	// --- Appearance --------------------------------------------------------
 
+	promptIcon(item: TreeItem): void {
+		new IconPickerModal(this.app, this.plugin.styles.get(item.path)?.icon, (icon) =>
+			this.applyStyle(item.path, { icon }),
+		).open();
+	}
+
+	promptColor(item: TreeItem): void {
+		new ColorModal(
+			this.app,
+			item.displayName,
+			this.plugin.styles.get(item.path)?.color,
+			(color) => this.applyStyle(item.path, { color }),
+		).open();
+	}
+
+	promptFont(item: TreeItem): void {
+		new FontModal(this.app, item.displayName, this.plugin.styles.get(item.path), (font) =>
+			this.applyStyle(item.path, font),
+		).open();
+	}
+
 	private addStyleItems(menu: Menu, item: TreeItem): void {
 		const path = item.path;
 		const styles = this.plugin.styles;
@@ -323,33 +419,21 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 			entry
 				.setTitle("Set icon")
 				.setIcon("image")
-				.onClick(() => {
-					new IconPickerModal(this.app, styles.get(path)?.icon, (icon) =>
-						this.applyStyle(path, { icon }),
-					).open();
-				}),
+				.onClick(() => this.promptIcon(item)),
 		);
 
 		menu.addItem((entry) =>
 			entry
 				.setTitle("Set color")
 				.setIcon("palette")
-				.onClick(() => {
-					new ColorModal(this.app, item.displayName, styles.get(path)?.color, (color) =>
-						this.applyStyle(path, { color }),
-					).open();
-				}),
+				.onClick(() => this.promptColor(item)),
 		);
 
 		menu.addItem((entry) =>
 			entry
 				.setTitle("Set font")
 				.setIcon("type")
-				.onClick(() => {
-					new FontModal(this.app, item.displayName, styles.get(path), (font) =>
-						this.applyStyle(path, font),
-					).open();
-				}),
+				.onClick(() => this.promptFont(item)),
 		);
 
 		if (styles.has(path)) {
@@ -429,7 +513,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		const result = await this.plugin.fileOps.createNote(folder);
 		if (!result.ok || !result.value) return;
 
-		const item = await this.revealCreated(result.value.path);
+		const item = await this.revealChanged(result.value.path);
 		if (!item) return;
 
 		this.renderer.select(item);
@@ -443,7 +527,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		const result = await this.plugin.fileOps.createFolder(folder);
 		if (!result.ok || !result.value) return;
 
-		const item = await this.revealCreated(result.value.path);
+		const item = await this.revealChanged(result.value.path);
 		if (!item) return;
 
 		this.renderer.select(item);
@@ -451,11 +535,11 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	}
 
 	/**
-	 * Brings a just-created item on screen. The vault event that would rebuild
-	 * the parent may not have been delivered yet, so this retries once on the
-	 * next frame before giving up.
+	 * Brings an item that just appeared or moved on screen. The vault event that
+	 * rebuilds its folder may not have been delivered yet, so this retries once
+	 * on the next frame before giving up.
 	 */
-	private async revealCreated(path: string): Promise<TreeItem | undefined> {
+	private async revealChanged(path: string): Promise<TreeItem | undefined> {
 		const renderer = this.renderer;
 		if (!renderer) return undefined;
 

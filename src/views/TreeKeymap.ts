@@ -1,6 +1,7 @@
 import { Platform, TFolder } from "obsidian";
 import { TreeItem } from "../components/TreeItem";
 import { TreeRenderer } from "../components/TreeRenderer";
+import { OutlineEdge } from "../services/OutlineService";
 
 /**
  * What the tree can do in response to a key. Implemented by TreeNavView.
@@ -17,6 +18,10 @@ export interface TreeKeymapActions {
 	createNoteIn(folder: TFolder): void;
 	createFolderIn(folder: TFolder): void;
 	getTargetFolder(): TFolder;
+	moveStep(item: TreeItem, delta: -1 | 1): void;
+	moveToEdge(item: TreeItem, edge: OutlineEdge): void;
+	indentItem(item: TreeItem): void;
+	outdentItem(item: TreeItem): void;
 }
 
 /**
@@ -47,6 +52,11 @@ export class TreeKeymap {
 		}
 
 		const selected = this.renderer.getSelected();
+
+		// Shift moves the item itself; the bare arrows move the selection.
+		if (event.shiftKey && selected && this.moveSelected(selected, event.key)) {
+			return consume(event);
+		}
 
 		switch (event.key) {
 			case "ArrowDown":
@@ -96,6 +106,32 @@ export class TreeKeymap {
 
 			default:
 				return;
+		}
+	}
+
+	/** Handles the Shift+arrow family; returns `false` for keys it does not own. */
+	private moveSelected(item: TreeItem, key: string): boolean {
+		switch (key) {
+			case "ArrowUp":
+				this.actions.moveStep(item, -1);
+				return true;
+			case "ArrowDown":
+				this.actions.moveStep(item, 1);
+				return true;
+			case "ArrowLeft":
+				this.actions.outdentItem(item);
+				return true;
+			case "ArrowRight":
+				this.actions.indentItem(item);
+				return true;
+			case "Home":
+				this.actions.moveToEdge(item, "top");
+				return true;
+			case "End":
+				this.actions.moveToEdge(item, "bottom");
+				return true;
+			default:
+				return false;
 		}
 	}
 

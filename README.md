@@ -11,6 +11,9 @@ the look and density of the built-in file explorer.
 - Sidebar view with a ribbon icon and an **Open TreeNav** command
 - Expand & collapse, remembered across restarts; active note highlighted
 - Keyboard navigation: arrows, `Enter`, `F2`, `Delete`, `Ctrl/⌘+N`, `Ctrl/⌘+Shift+N`
+- `Shift` + arrows moves the item itself: up, down, and in or out one level
+- Every tree action is also a command, so any key can be bound to it in
+  Obsidian's hotkey settings; the commands only fire while the tree has focus
 - Live sync with changes made outside TreeNav
 
 **Structure**
@@ -21,7 +24,8 @@ the look and density of the built-in file explorer.
   becomes a folder note and keeps opening the same note
 - Pull the last child back out and the folder collapses back into a plain note
 - Drag onto a name to place an item above or below it; that folder then keeps
-  its manual order
+  its manual order. Indenting under a note nests it the same way a drag does,
+  so there is one set of rules however the move was started
 - Inline rename, new note / new folder, **Move to…**, delete via trash
 
 **Appearance**
