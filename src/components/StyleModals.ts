@@ -1,5 +1,5 @@
 import { App, Modal, Setting } from "obsidian";
-import { FontStyle, FontWeight, TreeNavStyle } from "../types";
+import { FontFamily, FontStyle, FontWeight, TreeNavStyle } from "../types";
 
 /**
  * Obsidian's own accent colours, so a coloured item still belongs to the
@@ -64,19 +64,20 @@ export class ColorModal extends Modal {
 	}
 }
 
+type FontDraft = Pick<TreeNavStyle, "fontFamily" | "fontWeight" | "fontStyle" | "fontSize">;
+
 export class FontModal extends Modal {
-	private draft: Pick<TreeNavStyle, "fontWeight" | "fontStyle" | "fontSize">;
+	private draft: FontDraft;
 
 	constructor(
 		app: App,
 		private readonly itemName: string,
 		current: TreeNavStyle | undefined,
-		private readonly onSubmit: (
-			font: Pick<TreeNavStyle, "fontWeight" | "fontStyle" | "fontSize">,
-		) => void,
+		private readonly onSubmit: (font: FontDraft) => void,
 	) {
 		super(app);
 		this.draft = {
+			fontFamily: current?.fontFamily,
 			fontWeight: current?.fontWeight,
 			fontStyle: current?.fontStyle,
 			fontSize: current?.fontSize,
@@ -85,6 +86,23 @@ export class FontModal extends Modal {
 
 	onOpen(): void {
 		this.titleEl.setText(`Font — ${this.itemName}`);
+
+		new Setting(this.contentEl)
+			.setName("Typeface")
+			.setDesc("Follows the fonts your theme defines, so it travels between devices.")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOptions({
+						"": "Theme default",
+						interface: "Interface",
+						text: "Text",
+						monospace: "Monospace",
+					})
+					.setValue(this.draft.fontFamily ?? "")
+					.onChange((value) => {
+						this.draft.fontFamily = (value || undefined) as FontFamily | undefined;
+					}),
+			);
 
 		new Setting(this.contentEl).setName("Weight").addDropdown((dropdown) =>
 			dropdown

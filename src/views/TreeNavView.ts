@@ -57,6 +57,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		const treeEl = container.createDiv({ cls: "treenav-tree" });
 		treeEl.tabIndex = 0;
 		this.treeEl = treeEl;
+		this.applyTreeStyle();
 
 		this.renderer = new TreeRenderer(
 			this.app,
@@ -92,8 +93,15 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 	/** Full re-render; used when a setting changes the tree contents or order. */
 	rebuild(): void {
+		this.applyTreeStyle();
 		this.renderer?.render();
 		this.renderer?.setActiveFile(this.app.workspace.getActiveFile());
+	}
+
+	/** Switches between flat indentation and classic connector lines. */
+	applyTreeStyle(): void {
+		const classic = this.plugin.state.settings.treeStyle === "classic";
+		this.treeEl?.toggleClass("treenav-style-classic", classic);
 	}
 
 	/** Re-renders one folder's listing, for changes no vault event reports. */
@@ -160,10 +168,10 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 	openItem(item: TreeItem): void {
 		if (item.file instanceof TFolder) {
-			void this.openFolderNote(item.file, null);
+			void this.openFolderNote(item.file, null, true);
 			return;
 		}
-		void this.openFile(item.file as TFile, null);
+		void this.openFile(item.file as TFile, null, true);
 	}
 
 	renameItem(item: TreeItem): void {
@@ -275,7 +283,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 				entry
 					.setTitle("Open")
 					.setIcon("file")
-					.onClick(() => void this.openFile(file, null)),
+					.onClick(() => void this.openFile(file, null, true)),
 			);
 			menu.addItem((entry) =>
 				entry
@@ -289,7 +297,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 				entry
 					.setTitle(note ? "Open folder note" : "Create folder note")
 					.setIcon("book-open")
-					.onClick(() => void this.openFolderNote(file as TFolder, null)),
+					.onClick(() => void this.openFolderNote(file as TFolder, null, true)),
 			);
 		}
 
@@ -484,10 +492,20 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		return selected.file.parent ?? this.app.vault.getRoot();
 	}
 
-	private async openFile(file: TFile, event: MouseEvent | null): Promise<void> {
+	/**
+	 * Clicking a row opens the note but leaves focus in the tree, the way a file
+	 * tree normally behaves: the arrow keys keep working, and a shortcut bound
+	 * to a TreeNav command still reaches the tree. `Enter` and the menu hand
+	 * focus to the editor, because that is an explicit request to go and write.
+	 */
+	private async openFile(
+		file: TFile,
+		event: MouseEvent | null,
+		focusEditor = false,
+	): Promise<void> {
 		const newLeaf = event ? Keymap.isModEvent(event) : false;
 		try {
-			await this.app.workspace.getLeaf(newLeaf).openFile(file);
+			await this.app.workspace.getLeaf(newLeaf).openFile(file, { active: focusEditor });
 		} catch (error) {
 			// Without this the failure is invisible: the previously open note
 			// simply stays on screen.
@@ -496,14 +514,18 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		}
 	}
 
-	private async openFolderNote(folder: TFolder, event: MouseEvent | null): Promise<void> {
+	private async openFolderNote(
+		folder: TFolder,
+		event: MouseEvent | null,
+		focusEditor = false,
+	): Promise<void> {
 		const existing = this.plugin.folderNotes.getFolderNote(folder);
 		const note = existing ?? (await this.plugin.folderNotes.createFolderNote(folder));
 		if (!note) {
 			new Notice(`TreeNav: "${folder.name}" has no folder note.`);
 			return;
 		}
-		await this.openFile(note, event);
+		await this.openFile(note, event, focusEditor);
 	}
 
 	private async createNote(folder: TFolder): Promise<void> {
@@ -560,7 +582,8 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 	private async openPath(path: string): Promise<void> {
 		const file = this.app.vault.getAbstractFileByPath(path);
-		if (file instanceof TFile) await this.openFile(file, null);
+		// A note the user just created and named: put the cursor in it.
+		if (file instanceof TFile) await this.openFile(file, null, true);
 	}
 
 	private startRename(item: TreeItem, onDone?: (finalPath: string) => void): void {

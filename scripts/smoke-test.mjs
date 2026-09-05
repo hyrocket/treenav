@@ -814,6 +814,48 @@ if (!vaultArg) {
 	assert.equal(byPath.get("Welcome.md")?.parent?.path, "/", "a root item must not outdent");
 
 	console.log("outline moves: ok");
+
+	// --- Appearance ----------------------------------------------------------
+
+	const probe = document.createElement("div");
+	const folderEmoji = "\u{1F4C1}️";
+
+	// Emoji go in as text and keep their own colours; icon ids go through setIcon.
+	plugin.styles.update("Welcome.md", { icon: folderEmoji });
+	plugin.styles.applyToIcon(probe, byPath.get("Welcome.md"));
+	assert.equal(probe.textContent, folderEmoji, "an emoji icon should render as text");
+	assert.ok(probe.classList.contains("treenav-is-emoji"), "an emoji icon should be marked");
+
+	plugin.styles.update("Welcome.md", { icon: "lucide-star" });
+	plugin.styles.applyToIcon(probe, byPath.get("Welcome.md"));
+	assert.equal(
+		probe.querySelector(".svg-icon")?.getAttribute("data-icon"),
+		"lucide-star",
+		"an icon id should still go through setIcon",
+	);
+	assert.ok(!probe.classList.contains("treenav-is-emoji"), "the emoji mark should be cleared");
+
+	// A typeface resolves to the running theme's variable, not a font name.
+	plugin.styles.update("Welcome.md", { fontFamily: "monospace" });
+	plugin.styles.applyToRow(probe, "Welcome.md");
+	assert.equal(
+		probe.style.fontFamily,
+		"var(--font-monospace)",
+		"a typeface should resolve to a theme variable",
+	);
+
+	plugin.styles.clear("Welcome.md");
+
+	// The classic style is a class on the container, so it costs no re-render.
+	const treeEl = content.querySelector(".treenav-tree");
+	assert.ok(!treeEl.classList.contains("treenav-style-classic"), "modern is the default");
+	plugin.state.settings.treeStyle = "classic";
+	view.applyTreeStyle();
+	assert.ok(treeEl.classList.contains("treenav-style-classic"), "classic style did not apply");
+	plugin.state.settings.treeStyle = "modern";
+	view.applyTreeStyle();
+
+	console.log("appearance: ok");
 }
 
 console.log("\nsmoke test passed");

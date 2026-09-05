@@ -287,3 +287,114 @@ input.treenav-rename-input {
 	gap: var(--size-2-3);
 	margin: 0;
 }
+
+/* Emoji are text glyphs, so they need their own sizing in the icon slot. */
+.treenav-item-icon.treenav-is-emoji {
+	font-size: 13px;
+	line-height: 1;
+}
+
+.treenav-icon-suggestion-icon {
+	font-size: 16px;
+	line-height: 1;
+}
+
+/* --- Classic tree style --------------------------------------------------- */
+
+/*
+ * The connector lines of a traditional tree view. Each item draws the vertical
+ * segment beside it and a horizontal stub into its own row, so the line stops
+ * at the last child of a folder rather than running past it. The vertical is
+ * placed at the parent's collapse arrow, which is one indentation step to the
+ * left of the row's own.
+ */
+
+.treenav-style-classic .treenav-children::before {
+	/* Replaced by the per-item segments below. */
+	display: none;
+}
+
+.treenav-style-classic .treenav-item {
+	position: relative;
+}
+
+.treenav-style-classic .treenav-item::before,
+.treenav-style-classic .treenav-item-self::before {
+	content: "";
+	position: absolute;
+	border-color: var(--nav-indentation-guide-color, var(--background-modifier-border));
+	pointer-events: none;
+}
+
+/* Vertical: runs the full height of the item, children included. */
+.treenav-style-classic .treenav-item::before {
+	top: 0;
+	bottom: 0;
+	left: calc(
+		var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px
+	);
+	border-left: 1px dotted;
+}
+
+/* The last child ends the line at its own row rather than carrying it on. */
+.treenav-style-classic .treenav-item:last-child::before {
+	bottom: auto;
+	height: calc(var(--treenav-row-height) / 2);
+}
+
+/* Horizontal: from that vertical across to this row's arrow. */
+.treenav-style-classic .treenav-item-self::before {
+	top: calc(var(--treenav-row-height) / 2);
+	left: calc(
+		var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px
+	);
+	width: calc(var(--treenav-indent) - 1px);
+	border-top: 1px dotted;
+}
+
+/* Top-level rows have no parent to connect to. */
+.treenav-style-classic > .treenav-item::before,
+.treenav-style-classic > .treenav-item > .treenav-item-self::before {
+	display: none;
+}
+
+/* Boxed +/- in place of the chevron, masking the line it sits on. */
+.treenav-style-classic .treenav-collapse-icon .svg-icon {
+	display: none;
+}
+
+.treenav-style-classic .treenav-folder > .treenav-item-self > .treenav-collapse-icon {
+	transform: none;
+}
+
+.treenav-style-classic .treenav-folder > .treenav-item-self > .treenav-collapse-icon::before {
+	content: "+";
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 11px;
+	height: 11px;
+	border: 1px solid var(--nav-indentation-guide-color, var(--background-modifier-border));
+	background-color: var(--background-secondary);
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: 10px;
+	line-height: 1;
+}
+
+.treenav-style-classic
+	.treenav-folder.treenav-is-expanded
+	> .treenav-item-self
+	> .treenav-collapse-icon::before {
+	content: "\2212";
+}
+
+/* A leaf keeps the slot but shows no box, so titles stay in line. */
+.treenav-style-classic .treenav-item.treenav-is-leaf > .treenav-item-self > .treenav-collapse-icon {
+	visibility: hidden;
+}
+
+/* Tighter rows, the way a classic tree packs them. */
+.treenav-style-classic .treenav-item-self {
+	border-radius: 0;
+}

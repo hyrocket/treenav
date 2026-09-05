@@ -30,10 +30,14 @@ the look and density of the built-in file explorer.
 
 **Appearance**
 
-- Per-item icon, color, font weight, style and size, stored in plugin data and
-  never written into your notes
-- Folders and notes share one icon; the collapse arrow alone marks what has
-  children
+- Per-item icon, color, typeface, weight, style and size, stored in plugin data
+  and never written into your notes
+- Icons come from anything Obsidian has registered (Lucide and whatever other
+  plugins added) or from an emoji, typed straight into the search box
+- A folder you made looks like a folder; a folder that came from nesting keeps
+  the note icon, because it is still that note
+- Two tree styles: modern indentation, or the boxed connector lines of a
+  classic tree view
 
 ## Design notes
 

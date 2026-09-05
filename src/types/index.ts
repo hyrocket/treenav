@@ -1,11 +1,21 @@
 export const TREENAV_VIEW_TYPE = "treenav-view";
 export const TREENAV_ICON = "list-tree";
 
+/** How the tree draws depth: flat indentation, or classic connector lines. */
+export type TreeStyle = "modern" | "classic";
+
 /** How siblings are ordered inside a folder. */
 export type SortMode = "folders-first" | "files-first" | "mixed";
 
 /** What to do when a folder created by nesting loses its last child. */
 export type FlattenMode = "always" | "never" | "ask";
+
+/**
+ * A typeface is stored as a token rather than a font stack, so it follows the
+ * theme the user is running and stays meaningful on a machine that has
+ * different fonts installed.
+ */
+export type FontFamily = "interface" | "text" | "monospace";
 
 export type FontWeight = "normal" | "bold";
 export type FontStyle = "normal" | "italic";
@@ -17,6 +27,7 @@ export type FontStyle = "normal" | "italic";
 export interface TreeNavStyle {
 	icon?: string;
 	color?: string;
+	fontFamily?: FontFamily;
 	fontWeight?: FontWeight;
 	fontStyle?: FontStyle;
 	fontSize?: number;
@@ -38,6 +49,8 @@ export interface TreeNavSettings {
 	confirmDelete: boolean;
 	/** Draw a default icon on items with no icon of their own. */
 	showDefaultIcons: boolean;
+	/** Flat indentation, or the boxed connector lines of a classic tree view. */
+	treeStyle: TreeStyle;
 	/**
 	 * What happens when a folder TreeNav created by nesting loses its last
 	 * child: fold it back into a note, leave it alone, or ask.
@@ -54,6 +67,7 @@ export const DEFAULT_SETTINGS: TreeNavSettings = {
 	rememberExpandedFolders: true,
 	confirmDelete: true,
 	showDefaultIcons: true,
+	treeStyle: "modern",
 	flattenNestedFolders: "ask",
 };
 

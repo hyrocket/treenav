@@ -1,6 +1,11 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type TreeNavPlugin from "../main";
-import { FlattenMode, SortMode } from "../types";
+import { FlattenMode, SortMode, TreeStyle } from "../types";
+
+const TREE_STYLE_LABELS: Record<TreeStyle, string> = {
+	modern: "Modern",
+	classic: "Classic",
+};
 
 const FLATTEN_LABELS: Record<FlattenMode, string> = {
 	ask: "Ask each time",
@@ -74,6 +79,14 @@ export class TreeNavSettingTab extends PluginSettingTab {
 				}),
 			);
 
+		new Setting(containerEl).setName("Shortcuts").setHeading();
+
+		new Setting(containerEl)
+			.setName("Custom shortcuts")
+			.setDesc(
+				"Every TreeNav action is a command, so any key can be bound to it under Settings → Hotkeys (search for \"TreeNav\"). They only fire while the tree has keyboard focus, so a single-letter shortcut is safe to use — click a row once to give the tree focus. Built in already: arrows to move, Shift+arrows to move the item, Enter to open, F2 to rename, Delete to remove, Ctrl/Cmd+N for a new note.",
+			);
+
 		new Setting(containerEl).setName("Sorting").setHeading();
 
 		new Setting(containerEl)
@@ -102,6 +115,21 @@ export class TreeNavSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl).setName("Appearance").setHeading();
+
+		new Setting(containerEl)
+			.setName("Tree style")
+			.setDesc(
+				"Modern uses plain indentation with a light guide. Classic draws the boxed connector lines of a traditional tree view.",
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOptions(TREE_STYLE_LABELS)
+					.setValue(settings.treeStyle)
+					.onChange(async (value) => {
+						settings.treeStyle = value as TreeStyle;
+						await commit(true);
+					}),
+			);
 
 		new Setting(containerEl)
 			.setName("Show default icons")
