@@ -70,6 +70,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 			this,
 		);
 		this.keymap = new TreeKeymap(this.renderer, this);
+
 		this.renderer.render();
 		this.renderer.setActiveFile(this.app.workspace.getActiveFile());
 
@@ -80,6 +81,21 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 			if (event.target === treeEl) this.showRootMenu(event);
 		});
 		treeEl.addEventListener("keydown", (event) => this.handleKeyDown(event));
+
+		// Dragging a selected row takes the whole selection; dragging anything
+		// else replaces the selection first, so what moves is what is lit up.
+		//
+		// The drag layer is shared by every open TreeNav, so the tree the drag
+		// started in claims it here — in the capture phase, before the row's own
+		// handler asks for the set.
+		treeEl.addEventListener(
+			"dragstart",
+			() => {
+				this.plugin.dnd.resolveDragSet = (file) => this.dragSetFor(file);
+				this.plugin.dnd.rowFor = (file) => this.renderer?.getItem(file.path)?.rowEl ?? null;
+			},
+			true,
+		);
 
 		this.registerVaultEvents();
 	}
@@ -179,7 +195,9 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	}
 
 	deleteItem(item: TreeItem): void {
-		this.confirmDelete(item.file);
+		const files = this.selectionFor(item);
+		if (files.length > 1) this.confirmDeleteAll(files);
+		else this.confirmDelete(item.file);
 	}
 
 	createNoteIn(folder: TFolder): void {
@@ -271,8 +289,58 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		item.toggle();
 	}
 
+	/** A modifier click only moves the selection around; nothing is opened. */
+	onSelectionClick(_item: TreeItem): void {
+		this.treeEl?.focus();
+	}
+
+	/** Middle click opens in a new tab, the gesture the modifier used to be. */
+	onItemAuxClick(item: TreeItem, event: MouseEvent): void {
+		this.treeEl?.focus();
+		if (event.button !== 1) return;
+
+		const file = item.file;
+		if (file instanceof TFile) {
+			void this.app.workspace.getLeaf("tab").openFile(file);
+			return;
+		}
+		const note = this.plugin.folderNotes.getFolderNote(file as TFolder);
+		if (note) void this.app.workspace.getLeaf("tab").openFile(note);
+	}
+
+	/**
+	 * What a drag starting on `file` should carry: the selection when the row is
+	 * part of it, otherwise that row alone, which then becomes the selection.
+	 */
+	private dragSetFor(file: TAbstractFile): TAbstractFile[] {
+		const renderer = this.renderer;
+		if (!renderer) return [file];
+
+		if (!renderer.isSelected(file.path)) {
+			const item = renderer.getItem(file.path);
+			if (item) renderer.select(item);
+			return [file];
+		}
+		return renderer.getSelection().map((item) => item.file);
+	}
+
+	/** The rows an action applies to: the whole selection when `item` is in it. */
+	private selectionFor(item: TreeItem): TAbstractFile[] {
+		const selection = this.renderer?.getSelection() ?? [];
+		if (selection.length > 1 && selection.some((row) => row.path === item.path)) {
+			return selection.map((row) => row.file);
+		}
+		return [item.file];
+	}
+
 	onItemContextMenu(item: TreeItem, event: MouseEvent): void {
 		event.preventDefault();
+
+		const files = this.selectionFor(item);
+		if (files.length > 1) {
+			this.showSelectionMenu(files, event);
+			return;
+		}
 
 		const file = item.file;
 		const folder = file instanceof TFolder ? file : file.parent ?? this.app.vault.getRoot();
@@ -349,6 +417,38 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		menu.showAtMouseEvent(event);
 	}
 
+	/**
+	 * The menu for a multi-row selection: only what makes sense done to a set.
+	 * Renaming, folder notes and the outline moves are all about one row, so
+	 * they are left out rather than quietly applied to the first one.
+	 */
+	private showSelectionMenu(files: TAbstractFile[], event: MouseEvent): void {
+		const menu = new Menu();
+		const count = `${files.length} items`;
+
+		menu.addItem((entry) =>
+			entry
+				.setTitle(`Move ${count} to…`)
+				.setIcon("folder-input")
+				.onClick(() => this.promptMoveAll(files)),
+		);
+		menu.addItem((entry) =>
+			entry
+				.setTitle(`Appearance of ${count}…`)
+				.setIcon("palette")
+				.onClick(() => this.promptAppearanceOf(files)),
+		);
+		menu.addSeparator();
+		menu.addItem((entry) =>
+			entry
+				.setTitle(`Delete ${count}`)
+				.setIcon("trash")
+				.onClick(() => this.confirmDeleteAll(files)),
+		);
+
+		menu.showAtMouseEvent(event);
+	}
+
 	/** The keyboard moves, spelled out for people who reach for the mouse. */
 	private addOutlineItems(menu: Menu, item: TreeItem): void {
 		const moves: { title: string; icon: string; run: () => void }[] = [
@@ -396,12 +496,45 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		).open();
 	}
 
+	/** A folder is offered if it would take any of them; the rest stay put. */
+	private promptMoveAll(files: TAbstractFile[]): void {
+		new FolderSuggestModal(
+			this.app,
+			(folder) =>
+				files.every(
+					(file) => this.plugin.fileOps.checkMove(file, folder) !== null || folder === file.parent,
+				),
+			(folder) => void this.moveAll(files, folder),
+		).open();
+	}
+
+	/** One at a time: two moves at once can race for the same name. */
+	private async moveAll(files: TAbstractFile[], folder: TFolder): Promise<void> {
+		for (const file of files) {
+			if (file.parent !== folder) await this.plugin.fileOps.move(file, folder);
+		}
+	}
+
 	// --- Appearance --------------------------------------------------------
 
 	/** The quick path: the icon alone, without opening the whole dialog. */
 	promptIcon(item: TreeItem): void {
 		new IconPickerModal(this.app, this.plugin.styles.get(item.path)?.icon, (icon) =>
 			this.applyStyle(item.path, { icon }),
+		).open();
+	}
+
+	/** One dialog, previewed on the first row, applied to all of them. */
+	private promptAppearanceOf(files: TAbstractFile[]): void {
+		const first = files[0];
+		new AppearanceModal(
+			this.app,
+			first,
+			`${files.length} items`,
+			this.plugin.styles,
+			(style) => {
+				for (const file of files) this.applyStyle(file.path, style);
+			},
 		).open();
 	}
 
@@ -605,6 +738,29 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 			return `${trimmed}.md`;
 		}
 		return trimmed;
+	}
+
+	/**
+	 * Deleting several always asks, whatever the setting says: the setting was
+	 * agreed to for one file at a time, and a set is a bigger thing to undo.
+	 */
+	private confirmDeleteAll(files: TAbstractFile[]): void {
+		const remove = async () => {
+			for (const file of files) await this.plugin.fileOps.trash(file);
+		};
+
+		const folders = files.filter((file) => file instanceof TFolder).length;
+		const detail = folders
+			? ` Folders (${folders}) go with everything inside them.`
+			: "";
+
+		new ConfirmModal(
+			this.app,
+			`Delete ${files.length} items`,
+			`${files.length} items will be moved to the trash.${detail}`,
+			"Delete",
+			() => void remove(),
+		).open();
 	}
 
 	private confirmDelete(file: TAbstractFile): void {

@@ -353,7 +353,7 @@ const obsidianStub = {
 	Setting,
 	ButtonComponent,
 	Platform: { isMacOS: false },
-	Keymap: { isModEvent: () => false },
+	Keymap: { isModEvent: (event) => !!(event?.ctrlKey || event?.metaKey) },
 	setIcon: (el, icon) => {
 		const svg = document.createElement("span");
 		svg.className = "svg-icon";
@@ -1052,5 +1052,154 @@ if (!vaultArg) {
 
 	console.log("appearance: ok");
 }
+
+// --- Multi-selection and multi-drag --------------------------------------
+//
+// Driven through the row's own listeners: the click gestures and the drag
+// handlers are the whole feature, so testing the services underneath them
+// would prove nothing about it.
+
+view.rebuild();
+const rowFor = (path) => view.renderer.getItem(path)?.rowEl;
+const itemFor = (path) => view.renderer.getItem(path);
+
+const click = (path, opts = {}) =>
+	rowFor(path).dispatchEvent(new window.MouseEvent("click", { bubbles: true, ...opts }));
+
+const MEETING = "Projects/RE100/Meeting.md";
+
+click("Welcome.md");
+click(MEETING, { ctrlKey: true });
+assert.deepEqual(
+	view.renderer.getSelection().map((item) => item.path),
+	[MEETING, "Welcome.md"],
+	"a modifier click should add to the selection",
+);
+assert.ok(
+	rowFor("Welcome.md").classList.contains("treenav-is-selected") &&
+		rowFor(MEETING).classList.contains("treenav-is-selected"),
+	"both selected rows should be marked",
+);
+
+// Clicking the same row again takes it back out.
+click(MEETING, { ctrlKey: true });
+assert.deepEqual(
+	view.renderer.getSelection().map((item) => item.path),
+	["Welcome.md"],
+	"a second modifier click should remove the row",
+);
+
+// A range runs from the anchor to the shift-clicked row, in screen order.
+const visiblePaths = view.renderer.getVisibleItems().map((item) => item.path);
+click(visiblePaths[0]);
+click(visiblePaths[2], { shiftKey: true });
+assert.deepEqual(
+	view.renderer.getSelection().map((item) => item.path),
+	visiblePaths.slice(0, 3),
+	"shift-click should select the range between",
+);
+
+// Escape narrows back to one row rather than clearing everything.
+assert.ok(view.renderer.collapseSelection(), "Escape should have something to narrow");
+assert.equal(view.renderer.getSelection().length, 1, "narrowing should leave one row");
+
+// --- Dragging what is selected -------------------------------------------
+
+/** jsdom measures nothing, so the drop zones have to be told where they are. */
+const placeRow = (path, box) => {
+	const row = rowFor(path);
+	row.getBoundingClientRect = () => ({
+		top: box.top,
+		bottom: box.top + 20,
+		height: 20,
+		left: 0,
+		right: 200,
+		width: 200,
+	});
+	row.querySelector(".treenav-item-icon").getBoundingClientRect = () => ({
+		top: box.top,
+		bottom: box.top + 16,
+		height: 16,
+		left: 30,
+		right: 46,
+		width: 16,
+	});
+	return row;
+};
+
+const transfer = () => {
+	const store = new Map();
+	return {
+		setData: (type, value) => store.set(type, value),
+		getData: (type) => store.get(type) ?? "",
+		set effectAllowed(value) {},
+		set dropEffect(value) {},
+	};
+};
+
+const drag = (fromPath, toPath, point) => {
+	const data = transfer();
+	const start = new window.MouseEvent("dragstart", { bubbles: true });
+	Object.defineProperty(start, "dataTransfer", { value: data });
+	rowFor(fromPath).dispatchEvent(start);
+
+	const drop = new window.MouseEvent("drop", {
+		bubbles: true,
+		clientX: point.x,
+		clientY: point.y,
+	});
+	Object.defineProperty(drop, "dataTransfer", { value: data });
+	rowFor(toPath).dispatchEvent(drop);
+};
+
+// Two notes in different folders, dragged into a third by grabbing one.
+click("Welcome.md");
+click(MEETING, { ctrlKey: true });
+placeRow("Welcome.md", { top: 0 });
+placeRow(MEETING, { top: 20 });
+placeRow("Archive", { top: 40 });
+
+assert.ok(
+	rowFor("Welcome.md").classList.contains("treenav-is-selected"),
+	"the drag should start from a selected row",
+);
+drag("Welcome.md", "Archive", { x: 150, y: 50 });
+await new Promise((resolve) => setTimeout(resolve, 5));
+
+assert.equal(
+	byPath.get("Archive/Welcome.md")?.parent?.path,
+	"Archive",
+	"the dragged row should have moved",
+);
+assert.equal(
+	byPath.get("Archive/Meeting.md")?.parent?.path,
+	"Archive",
+	"the rest of the selection should have moved with it",
+);
+
+// Dragging a row that is not selected carries that row and nothing else.
+view.rebuild();
+view.renderer.getItem("Archive").setExpanded(true);
+placeRow("Archive/Welcome.md", { top: 0 });
+placeRow("Archive/Meeting.md", { top: 20 });
+placeRow("Projects", { top: 40 });
+
+click("Archive/Welcome.md");
+click("Archive/Meeting.md", { ctrlKey: true });
+drag("Projects", "Archive/Welcome.md", { x: 150, y: 5 });
+await new Promise((resolve) => setTimeout(resolve, 5));
+
+assert.equal(
+	byPath.get("Archive/Projects")?.parent?.path,
+	"Archive",
+	"the unselected row should have moved on its own",
+);
+assert.equal(
+	byPath.get("Archive/Welcome.md")?.parent?.path,
+	"Archive",
+	"an unselected drag must leave the selection where it is",
+);
+
+console.log("multi-select drag: ok");
 
 console.log("\nsmoke test passed");

@@ -49,6 +49,23 @@ export class OutlineService {
 		this.commit(parent, siblings);
 	}
 
+	/**
+	 * The same, for several items at once, keeping the order they were in.
+	 *
+	 * Dropping after a row inserts each one directly below it, so working
+	 * backwards is what leaves the set in its original order.
+	 */
+	async placeAllNextTo(
+		sources: TAbstractFile[],
+		target: TAbstractFile,
+		position: OutlinePosition,
+	): Promise<void> {
+		const ordered = position === "after" ? [...sources].reverse() : sources;
+		for (const source of ordered) {
+			if (source !== target) await this.placeNextTo(source, target, position);
+		}
+	}
+
 	/** Moves one place up (`-1`) or down (`+1`) among its visible siblings. */
 	moveStep(file: TAbstractFile, delta: -1 | 1): void {
 		const parent = file.parent;

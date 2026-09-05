@@ -13,6 +13,7 @@ export interface TreeContext {
 	unregisterItem(item: TreeItem): void;
 	isActive(path: string): boolean;
 	handleClick(item: TreeItem, event: MouseEvent): void;
+	handleAuxClick(item: TreeItem, event: MouseEvent): void;
 	handleContextMenu(item: TreeItem, event: MouseEvent): void;
 }
 
@@ -72,6 +73,13 @@ export class TreeItem implements DropTargetRow {
 		this.titleEl = this.rowEl.createDiv({ cls: "treenav-item-title", text: this.displayName });
 
 		this.rowEl.addEventListener("click", (event) => this.ctx.handleClick(this, event));
+		// Middle click. A modifier now extends the selection, so this is what is
+		// left to open a note in a new tab without leaving the tree.
+		this.rowEl.addEventListener("auxclick", (event) => {
+			if (event.button !== 1) return;
+			event.preventDefault();
+			this.ctx.handleAuxClick(this, event);
+		});
 		this.rowEl.addEventListener("contextmenu", (event) => this.ctx.handleContextMenu(this, event));
 
 		this.ctx.dnd.makeDraggable(this.rowEl, () => this.file);

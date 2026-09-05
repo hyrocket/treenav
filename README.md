@@ -11,6 +11,8 @@ the look and density of the built-in file explorer.
 - Sidebar view with a ribbon icon and an **Open TreeNav** command
 - Expand & collapse, remembered across restarts; active note highlighted
 - Keyboard navigation: arrows, `Enter`, `F2`, `Delete`, `Ctrl/⌘+N`, `Ctrl/⌘+Shift+N`
+- Multi-select with `Ctrl/⌘`+click and `Shift`+click, `Ctrl/⌘+A` for everything
+  on screen, `Escape` to narrow back to one. Middle click opens in a new tab
 - `Shift` + arrows moves the item itself: up, down, and in or out one level
 - Every tree action is also a command, so any key can be bound to it in
   Obsidian's hotkey settings; the commands only fire while the tree has focus
@@ -27,6 +29,8 @@ the look and density of the built-in file explorer.
   its manual order. Indenting under a note nests it the same way a drag does,
   so there is one set of rules however the move was started
 - Inline rename, new note / new folder, **Move to…**, delete via trash
+- Drag, move, style or delete a whole selection at once; a target that suits
+  only some of them takes those and leaves the rest where they are
 
 **Appearance**
 

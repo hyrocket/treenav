@@ -31,6 +31,10 @@ export interface TreeKeymapActions {
  * The modifier is Cmd on macOS and Ctrl elsewhere. Handled keys are consumed so
  * they never reach Obsidian's global shortcuts (Ctrl+N would otherwise create a
  * note in the wrong place).
+ *
+ * Shift+arrow moves the item rather than extending the selection: this tree is
+ * an outline you can rearrange, and that is the more useful thing to reach for.
+ * Ranges are picked up with Shift+click instead.
  */
 export class TreeKeymap {
 	constructor(
@@ -48,6 +52,11 @@ export class TreeKeymap {
 			const folder = this.actions.getTargetFolder();
 			if (event.shiftKey) this.actions.createFolderIn(folder);
 			else this.actions.createNoteIn(folder);
+			return consume(event);
+		}
+
+		if (mod && event.key.toLowerCase() === "a") {
+			this.renderer.selectAll();
 			return consume(event);
 		}
 
@@ -103,6 +112,12 @@ export class TreeKeymap {
 			case "Delete":
 				if (selected) this.actions.deleteItem(selected);
 				return consume(event);
+
+			case "Escape":
+				// Only when it has something to undo, so Escape still reaches
+				// Obsidian when the tree has nothing to narrow.
+				if (this.renderer.collapseSelection()) return consume(event);
+				return;
 
 			default:
 				return;

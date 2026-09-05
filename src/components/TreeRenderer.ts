@@ -1,4 +1,4 @@
-import { App, TAbstractFile, TFile, TFolder } from "obsidian";
+import { App, Keymap, TAbstractFile, TFile, TFolder } from "obsidian";
 import { DragDropService } from "../services/DragDropService";
 import { FolderNoteService } from "../services/FolderNoteService";
 import { StyleService } from "../services/StyleService";
@@ -10,6 +10,9 @@ import { TreeContext, TreeItem } from "./TreeItem";
 export interface TreeRendererHost {
 	onItemClick(item: TreeItem, event: MouseEvent): void;
 	onItemContextMenu(item: TreeItem, event: MouseEvent): void;
+	/** A click that only changed the selection, opening nothing. */
+	onSelectionClick(item: TreeItem): void;
+	onItemAuxClick(item: TreeItem, event: MouseEvent): void;
 }
 
 /** Path used for the vault root throughout the renderer. */
@@ -26,7 +29,12 @@ export class TreeRenderer implements TreeContext {
 	private readonly itemsByPath = new Map<string, TreeItem>();
 	private rootChildren: TreeItem[] = [];
 
-	private selectedPath: string | null = null;
+	/** Selected rows, in the order they were added. */
+	private selection = new Set<string>();
+	/** The row single-item actions work on: the last one the user touched. */
+	private lead: string | null = null;
+	/** Where a shift-click measures its range from. */
+	private anchor: string | null = null;
 	private activePath: string | null = null;
 	private activeFolderPath: string | null = null;
 
@@ -65,7 +73,8 @@ export class TreeRenderer implements TreeContext {
 		// place, and the row still has to be removable under its original key.
 		item.registryKey = item.path;
 		this.itemsByPath.set(item.registryKey, item);
-		if (item.path === this.selectedPath) item.setSelected(true);
+		// A rebuilt row has to come back selected if its path still is.
+		if (this.selection.has(item.path)) item.setSelected(true);
 	}
 
 	unregisterItem(item: TreeItem): void {
@@ -78,13 +87,34 @@ export class TreeRenderer implements TreeContext {
 		return path === this.activePath || path === this.activeFolderPath;
 	}
 
+	/**
+	 * Click gestures, following the core file explorer: a modifier extends the
+	 * selection instead of opening anything, so several rows can be dragged or
+	 * deleted together.
+	 */
 	handleClick(item: TreeItem, event: MouseEvent): void {
+		if (event.shiftKey) {
+			this.selectRange(item);
+			this.host.onSelectionClick(item);
+			return;
+		}
+		if (Keymap.isModEvent(event)) {
+			this.toggleSelected(item);
+			this.host.onSelectionClick(item);
+			return;
+		}
 		this.select(item);
 		this.host.onItemClick(item, event);
 	}
 
+	handleAuxClick(item: TreeItem, event: MouseEvent): void {
+		this.host.onItemAuxClick(item, event);
+	}
+
+	/** A right-click outside the selection replaces it, the way every tree does. */
 	handleContextMenu(item: TreeItem, event: MouseEvent): void {
-		this.select(item);
+		if (!this.selection.has(item.path)) this.select(item);
+		else this.lead = item.path;
 		this.host.onItemContextMenu(item, event);
 	}
 
@@ -180,10 +210,89 @@ export class TreeRenderer implements TreeContext {
 
 	// --- Selection / active file ------------------------------------------
 
+	/** Replaces the selection with one row. */
 	select(item: TreeItem | null): void {
-		if (this.selectedPath) this.itemsByPath.get(this.selectedPath)?.setSelected(false);
-		this.selectedPath = item?.path ?? null;
-		item?.setSelected(true);
+		this.clearSelection();
+		if (!item) return;
+		this.selection.add(item.path);
+		this.lead = item.path;
+		this.anchor = item.path;
+		item.setSelected(true);
+	}
+
+	/** Adds or removes one row, leaving the rest of the selection alone. */
+	toggleSelected(item: TreeItem): void {
+		if (this.selection.delete(item.path)) {
+			item.setSelected(false);
+			if (this.lead === item.path) this.lead = lastOf(this.selection);
+		} else {
+			this.selection.add(item.path);
+			item.setSelected(true);
+			this.lead = item.path;
+		}
+		this.anchor = item.path;
+	}
+
+	/** Selects everything between the anchor and `item`, inclusive. */
+	selectRange(item: TreeItem): void {
+		const visible = this.getVisibleItems();
+		const from = visible.findIndex((row) => row.path === this.anchor);
+		const to = visible.indexOf(item);
+		if (from === -1 || to === -1) {
+			this.select(item);
+			return;
+		}
+
+		const anchor = this.anchor;
+		this.clearSelection();
+		const [start, end] = from <= to ? [from, to] : [to, from];
+		for (let i = start; i <= end; i += 1) {
+			this.selection.add(visible[i].path);
+			visible[i].setSelected(true);
+		}
+		// The anchor stays put, so dragging the shift-click widens the same range.
+		this.anchor = anchor;
+		this.lead = item.path;
+	}
+
+	/** Every row on screen; collapsed folders keep their contents out of it. */
+	selectAll(): void {
+		const visible = this.getVisibleItems();
+		if (visible.length === 0) return;
+		this.clearSelection();
+		for (const item of visible) {
+			this.selection.add(item.path);
+			item.setSelected(true);
+		}
+		this.lead = visible[visible.length - 1].path;
+		this.anchor = visible[0].path;
+	}
+
+	/** Narrows a multi-row selection back to one row. Reports whether it did. */
+	collapseSelection(): boolean {
+		if (this.selection.size < 2) return false;
+		this.select(this.getSelected());
+		return true;
+	}
+
+	clearSelection(): void {
+		for (const path of this.selection) this.itemsByPath.get(path)?.setSelected(false);
+		this.selection.clear();
+		this.lead = null;
+		this.anchor = null;
+	}
+
+	isSelected(path: string): boolean {
+		return this.selection.has(path);
+	}
+
+	/** The selected rows, in the order they appear on screen. */
+	getSelection(): TreeItem[] {
+		if (this.selection.size < 2) {
+			const single = this.getSelected();
+			return single ? [single] : [];
+		}
+		return this.getVisibleItems().filter((item) => this.selection.has(item.path));
 	}
 
 	/** Collapses every expanded folder, deepest first so no state is left behind. */
@@ -199,7 +308,7 @@ export class TreeRenderer implements TreeContext {
 	}
 
 	getSelected(): TreeItem | null {
-		return this.selectedPath ? this.itemsByPath.get(this.selectedPath) ?? null : null;
+		return this.lead ? this.itemsByPath.get(this.lead) ?? null : null;
 	}
 
 	setActiveFile(file: TFile | null): void {
@@ -217,7 +326,9 @@ export class TreeRenderer implements TreeContext {
 
 	/** Drops selection state for a path that no longer exists. */
 	forgetSelection(path: string): void {
-		if (this.selectedPath === path) this.selectedPath = null;
+		this.selection.delete(path);
+		if (this.lead === path) this.lead = lastOf(this.selection);
+		if (this.anchor === path) this.anchor = this.lead;
 	}
 
 	destroy(): void {
@@ -232,6 +343,12 @@ export class TreeRenderer implements TreeContext {
 		this.rootChildren = [];
 		this.containerEl.empty();
 	}
+}
+
+function lastOf(paths: Set<string>): string | null {
+	let last: string | null = null;
+	for (const path of paths) last = path;
+	return last;
 }
 
 function isStrictAncestor(ancestor: string, path: string): boolean {
