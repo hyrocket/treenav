@@ -613,7 +613,7 @@ if (!vaultArg) {
 		content
 			.querySelector(`[data-path="${path}"] .treenav-item-icon .svg-icon`)
 			?.getAttribute("data-icon");
-	assert.equal(iconOf("Projects"), "folder", "a plain folder should show the folder icon");
+	assert.equal(iconOf("Projects"), "folder-closed", "a plain folder should show the folder icon");
 	assert.equal(iconOf("Welcome.md"), "file-text", "a note should show the note icon");
 
 	// The boolean this setting used to be must survive the upgrade.
@@ -706,7 +706,7 @@ if (!vaultArg) {
 		return el.querySelector(".svg-icon")?.getAttribute("data-icon");
 	};
 	const ideas = byPath.get("Ideas");
-	assert.equal(defaultIconFor(ideas), "folder", "a plain folder shows the folder icon");
+	assert.equal(defaultIconFor(ideas), "folder-closed", "a plain folder shows the folder icon");
 	plugin.state.markNested("Ideas");
 	assert.equal(defaultIconFor(ideas), "file-text", "a nested folder keeps the note icon");
 	plugin.state.unmarkNested("Ideas");

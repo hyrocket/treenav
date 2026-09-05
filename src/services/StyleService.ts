@@ -8,7 +8,9 @@ import { TreeNavStyle } from "../types";
  * that way the round trip of nesting and un-nesting never makes a note appear
  * to become something else and then an empty folder.
  */
-const FOLDER_ICON = "folder";
+// `folder-closed` over `folder`: the plain one has no lid line and reads as
+// open. This is also what the core file explorer uses.
+const FOLDER_ICON = "folder-closed";
 const NOTE_ICON = "file-text";
 
 /**
