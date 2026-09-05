@@ -386,7 +386,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 		const file = item.file;
 		const folder = file instanceof TFolder ? file : file.parent ?? this.app.vault.getRoot();
-		const menu = new Menu();
+		const menu = orderedMenu();
 
 		/*
 		 * Everyone else first, then a rule, then ours.
@@ -470,7 +470,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	 * they are left out rather than quietly applied to the first one.
 	 */
 	private showSelectionMenu(files: TAbstractFile[], event: MouseEvent): void {
-		const menu = new Menu();
+		const menu = orderedMenu();
 		const count = `${files.length} items`;
 
 		menu.addItem((entry) =>
@@ -632,7 +632,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	private showRootMenu(event: MouseEvent): void {
 		event.preventDefault();
 		const root = this.app.vault.getRoot();
-		const menu = new Menu();
+		const menu = orderedMenu();
 		menu.addItem((entry) =>
 			entry
 				.setTitle("New note")
@@ -825,4 +825,34 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 			remove,
 		).open();
 	}
+}
+
+/**
+ * A menu that arranges its groups the way the core file explorer does.
+ *
+ * Obsidian sorts menu items by section, in an order the menu is given up front.
+ * Without one the groups fall wherever their first item happened to arrive, so
+ * the same entries from the same plugins came out in a different order here
+ * than in the explorer beside it.
+ *
+ * `addSections` is not in the public typings, so it is called only if it is
+ * there: the list is a nicety, and a menu in first-come order is no worse than
+ * what we had.
+ */
+function orderedMenu(): Menu {
+	const menu = new Menu();
+	const sectioned = menu as Menu & { addSections?: (sections: string[]) => Menu };
+	sectioned.addSections?.([
+		"title",
+		"open",
+		"action-primary",
+		"action",
+		"info",
+		"view",
+		"system",
+		// Ours: no section, so the whole block lands together, after the rest.
+		"",
+		"danger",
+	]);
+	return menu;
 }
