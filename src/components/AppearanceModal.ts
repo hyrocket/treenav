@@ -58,7 +58,7 @@ export class AppearanceModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.titleEl.setText("Appearance");
+		this.titleEl.setText("Font & color");
 		this.modalEl.addClass("treenav-appearance-modal");
 
 		this.buildPreview();

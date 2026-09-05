@@ -34,8 +34,8 @@ the look and density of the built-in file explorer.
 
 **Appearance**
 
-- One **Appearance** dialog per item — icon, color, typeface, emphasis and size,
-  previewed on a live copy of the row and applied together
+- One **Font & color** dialog per item — color, typeface, emphasis, size and
+  the icon, previewed on a live copy of the row and applied together
 - Stored in plugin data, never written into your notes
 - Typefaces are the theme's own (interface / text / monospace), so a styled item
   looks right on any machine
