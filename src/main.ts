@@ -4,6 +4,7 @@ import { DragDropService } from "./services/DragDropService";
 import { FileOpsService } from "./services/FileOpsService";
 import { FolderNoteService } from "./services/FolderNoteService";
 import { OutlineService } from "./services/OutlineService";
+import { SearchService } from "./services/SearchService";
 import { StyleService } from "./services/StyleService";
 import { TreeService } from "./services/TreeService";
 import { TreeNavSettingTab } from "./settings/TreeNavSettingTab";
@@ -20,6 +21,7 @@ export default class TreeNavPlugin extends Plugin {
 	treeService!: TreeService;
 	dnd!: DragDropService;
 	outline!: OutlineService;
+	search!: SearchService;
 	styles!: StyleService;
 
 	async onload(): Promise<void> {
@@ -34,6 +36,7 @@ export default class TreeNavPlugin extends Plugin {
 		// A pure reorder changes no file, so no vault event announces it.
 		this.outline.onChanged = (folderPath) => this.refreshFolder(folderPath);
 		this.dnd = new DragDropService(this.app, this.fileOps, this.outline);
+		this.search = new SearchService(this.app);
 		this.styles = new StyleService(this.state);
 
 		this.registerView(TREENAV_VIEW_TYPE, (leaf) => new TreeNavView(leaf, this));
@@ -51,6 +54,11 @@ export default class TreeNavPlugin extends Plugin {
 		 * opens the view if it is not there, since being told "no tree" would be
 		 * a useless answer to "show me where I am".
 		 */
+		this.addCommand({
+			id: "find-in-tree",
+			name: "Find a file in the tree",
+			callback: () => void this.openSearch(),
+		});
 		this.addCommand({
 			id: "reveal-active-note",
 			name: "Reveal active note",
@@ -237,6 +245,17 @@ export default class TreeNavPlugin extends Plugin {
 	 * migrating path-keyed state and keeping folder notes named after their
 	 * folder.
 	 */
+	/** Opened from anywhere, so it brings the view along if there is not one. */
+	async openSearch(): Promise<void> {
+		await this.activateView();
+		for (const leaf of this.app.workspace.getLeavesOfType(TREENAV_VIEW_TYPE)) {
+			if (leaf.view instanceof TreeNavView) {
+				leaf.view.promptSearch();
+				return;
+			}
+		}
+	}
+
 	private async revealActiveNote(): Promise<void> {
 		await this.activateView();
 		for (const leaf of this.app.workspace.getLeavesOfType(TREENAV_VIEW_TYPE)) {

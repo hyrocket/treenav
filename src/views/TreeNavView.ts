@@ -14,6 +14,7 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { AppearanceModal } from "../components/AppearanceModal";
 import { FolderSuggestModal } from "../components/FolderSuggestModal";
 import { IconPickerModal } from "../components/IconPickerModal";
+import { SearchModal } from "../components/SearchModal";
 import { startInlineRename } from "../components/InlineRename";
 import { TreeItem } from "../components/TreeItem";
 import { TreeRenderer, TreeRendererHost } from "../components/TreeRenderer";
@@ -157,6 +158,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		// One button rather than two: collapsing and expanding are the same
 		// question asked from opposite ends, and it always offers the one that
 		// would do something.
+		button("search", "Find a file", () => this.promptSearch());
 		this.foldEl = button("chevrons-down-up", "Collapse all", () => this.toggleFold());
 		this.updateFoldButton();
 	}
@@ -282,6 +284,23 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	/** The command form: only a file can be copied. */
 	duplicateItem(item: TreeItem): void {
 		if (item.file instanceof TFile) void this.duplicate(item.file);
+	}
+
+	/** Find a file by name, then land on it. */
+	promptSearch(): void {
+		new SearchModal(this.app, this.plugin.search, this.plugin.styles, (file) => {
+			void this.openAndReveal(file);
+		}).open();
+	}
+
+	/**
+	 * Opens the file and puts the tree on it. Opening first is deliberate: the
+	 * reveal reads whatever the workspace now calls active, so a folder note
+	 * lands on its folder's row without anything here having to know that.
+	 */
+	private async openAndReveal(file: TFile): Promise<void> {
+		await this.openFile(file, null, true);
+		this.revealActive();
 	}
 
 	/**

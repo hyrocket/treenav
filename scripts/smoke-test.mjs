@@ -99,6 +99,8 @@ class TFile extends TAbstractFile {
 		const dot = this.name.lastIndexOf(".");
 		this.basename = dot > 0 ? this.name.slice(0, dot) : this.name;
 		this.extension = dot > 0 ? this.name.slice(dot + 1) : "";
+		// Written just now, which is what the age filter reads.
+		this.stat = { ctime: Date.now(), mtime: Date.now(), size: 0 };
 	}
 }
 class TFolder extends TAbstractFile {
@@ -149,8 +151,41 @@ class Modal {
 		this.onClose?.();
 	}
 }
-class FuzzySuggestModal extends Modal {
+class SuggestModal extends Modal {
+	constructor(app) {
+		super(app);
+		this.limit = 50;
+		this.inputEl = document.createElement("input");
+		this.resultContainerEl = this.modalEl.appendChild(document.createElement("div"));
+		this.rendered = [];
+		this.inputEl.addEventListener("input", () => this.runQuery());
+	}
 	setPlaceholder() {}
+	setInstructions() {}
+	onOpen() {}
+	/** What the suggester does for itself: ask, then draw. */
+	runQuery() {
+		this.rendered = this.getSuggestions(this.inputEl.value) ?? [];
+		this.resultContainerEl.empty();
+		for (const item of this.rendered) {
+			this.renderSuggestion(item, this.resultContainerEl.createDiv({ cls: "suggestion-item" }));
+		}
+	}
+	/** Typing, as the test does it. */
+	type(query) {
+		this.inputEl.value = query;
+		this.runQuery();
+	}
+}
+
+class FuzzySuggestModal extends SuggestModal {
+	getSuggestions(query) {
+		const needle = query.toLowerCase();
+		return this.getItems()
+			.filter((item) => this.getItemText(item).toLowerCase().includes(needle))
+			.map((item) => ({ item, match: { score: 0, matches: [] } }));
+	}
+	renderSuggestion() {}
 }
 /** Menus the run opened, so a gesture that should raise one can be checked. */
 const openedMenus = [];
@@ -354,7 +389,7 @@ const obsidianStub = {
 	ItemView,
 	Modal,
 	FuzzySuggestModal,
-	SuggestModal: FuzzySuggestModal,
+	SuggestModal,
 	Menu,
 	Plugin,
 	PluginSettingTab,
@@ -374,6 +409,7 @@ const obsidianStub = {
 		el.appendChild(svg);
 	},
 	getIconIds: () => ["lucide-folder", "lucide-file"],
+	getAllTags: (cache) => (cache?.tags ?? []).map((entry) => entry.tag),
 	normalizePath: (p) => p,
 	debounce: (cb) => {
 		const fn = (...args) => cb(...args);
@@ -659,6 +695,12 @@ const openLeaves = [];
 /** What the workspace reports as the note being edited. */
 let activeFile = null;
 
+/** Tags the fake metadata cache reports. Keyed by name: files get moved here. */
+const TAGS = {
+	Welcome: ["#project/alpha", "#todo"],
+	Planning: ["#project"],
+};
+
 /** Callbacks the plugin asked to run once the layout is up. */
 const layoutReady = [];
 
@@ -667,6 +709,7 @@ const app = {
 	vault: {
 		getRoot: () => root,
 		getAbstractFileByPath: (p) => byPath.get(p) ?? null,
+		getFiles: () => [...byPath.values()].filter((f) => f instanceof TFile),
 		on,
 		create: async (path) => {
 			const slash = path.lastIndexOf("/");
@@ -712,6 +755,10 @@ const app = {
 			}
 			emit("delete", file);
 		},
+	},
+	metadataCache: {
+		// Only what the search reads: a couple of files carry tags.
+		getFileCache: (file) => ({ tags: (TAGS[file.basename] ?? []).map((tag) => ({ tag })) }),
 	},
 	workspace: {
 		on,
@@ -875,7 +922,7 @@ if (notices.length) console.log("notices       :", notices.join(" | "));
 
 assert.equal(
 	content.querySelectorAll(".nav-action-button").length,
-	3,
+	4,
 	"the header buttons are missing",
 );
 assert.ok(rows.length > 0, "the tree rendered no rows at all");
@@ -1497,7 +1544,7 @@ console.log("drag cancel: ok");
 
 // --- One button for collapse and expand --------------------------------------
 
-const foldEl = content.querySelectorAll(".nav-action-button")[2];
+const foldEl = content.querySelector('.nav-action-button[aria-label="Collapse all"]');
 assert.ok(foldEl, "the fold button is missing");
 
 view.renderer.getItem("Archive").setExpanded(true);
@@ -1602,5 +1649,85 @@ assert.equal(
 
 activeFile = null;
 console.log("reveal active: ok");
+
+// --- Finding a file ----------------------------------------------------------
+//
+// Everything the filters read is Obsidian's own: kind, extension, modification
+// time and tags. TreeNav's icons and colours are deliberately not among them.
+
+const found = (query, filters = {}) =>
+	plugin.search
+		.search(query, { kind: "any", extension: null, age: "any", tag: null, ...filters }, 100)
+		.files.map((f) => f.name);
+
+assert.ok(found("welcome").includes("Welcome.md"), "a name should be found by part of it");
+assert.ok(found("WELCOME").includes("Welcome.md"), "case should not matter");
+assert.equal(found("no such file anywhere").length, 0, "a miss should find nothing");
+
+// A name that starts with the query comes before one that merely contains it.
+const ranked = plugin.search
+	.search("m", { kind: "any", extension: null, age: "any", tag: null }, 100)
+	.files.map((f) => f.basename);
+const startsWith = ranked.findIndex((name) => name.toLowerCase().startsWith("m"));
+const contains = ranked.findIndex(
+	(name) => !name.toLowerCase().startsWith("m") && name.toLowerCase().includes("m"),
+);
+assert.ok(
+	startsWith === -1 || contains === -1 || startsWith < contains,
+	"a name that starts with the query should rank first",
+);
+
+assert.ok(found("", { kind: "attachments" }).includes("attachment.txt"), "attachments filter");
+assert.ok(!found("", { kind: "notes" }).includes("attachment.txt"), "notes filter excludes it");
+assert.deepEqual(found("", { extension: "txt" }), ["attachment.txt"], "extension filter");
+
+// A parent tag stands for everything under it.
+assert.ok(found("", { tag: "todo" }).includes("Welcome.md"), "tag filter");
+assert.ok(found("", { tag: "project" }).includes("Welcome.md"), "#project should match #project/alpha");
+assert.ok(!found("", { tag: "todo" }).includes("attachment.txt"), "an untagged file is excluded");
+
+// Nothing in the fixture is older than this run, so the age filter keeps it all.
+assert.ok(found("", { age: "week" }).length > 0, "recently written files are recent");
+
+assert.ok(plugin.search.extensions().includes("md"), "the extensions on offer come from the vault");
+assert.ok(plugin.search.tags().includes("project/alpha"), "the tags on offer come from the cache");
+
+// The cap reports what it left out.
+const capped = plugin.search.search("", { kind: "any", extension: null, age: "any", tag: null }, 2);
+assert.equal(capped.files.length, 2, "the cap should hold");
+assert.ok(capped.total > 2, "the total should count what was left out");
+
+console.log("search: ok");
+
+// --- The dialog, and what choosing does --------------------------------------
+
+view.renderer.collapseAll();
+view.promptSearch();
+const finder = openedModals.at(-1);
+assert.equal(
+	finder.modalEl.querySelectorAll(".treenav-search-filter").length,
+	4,
+	"kind, extension, age and tag",
+);
+
+finder.type("old note");
+assert.equal(finder.rendered.length, 1, "one match for that name");
+assert.equal(
+	finder.resultContainerEl.querySelector(".treenav-search-path").textContent,
+	"Archive/2024/Q1",
+	"a result should say where it lives",
+);
+
+// Choosing opens the file, and the tree follows it wherever it was.
+const chosen = finder.rendered[0];
+activeFile = chosen;
+finder.onChooseSuggestion(chosen);
+await new Promise((resolve) => setTimeout(resolve, 5));
+
+assert.ok(view.renderer.getItem(chosen.path), "choosing should open the folders in the way");
+assert.equal(view.renderer.getSelected()?.path, chosen.path, "and land on the row");
+activeFile = null;
+
+console.log("find dialog: ok");
 
 console.log("\nsmoke test passed");
