@@ -13,4 +13,7 @@ test-vault/
 # Disposable measuring vault; `npm run make-vault` recreates it
 bench-vault/
 
+# Disposable showcase vault; `npm run demo` recreates it
+demo-vault/
+
 .DS_Store

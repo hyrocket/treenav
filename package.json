@@ -13,7 +13,8 @@
 		"reset": "node scripts/reset-test-vault.mjs",
 		"smoke": "node scripts/smoke-test.mjs",
 		"bench": "node scripts/smoke-test.mjs --bench 1000 && node scripts/smoke-test.mjs --bench 5000 && node scripts/smoke-test.mjs --bench 20000",
-		"make-vault": "node scripts/make-vault.mjs"
+		"make-vault": "node scripts/make-vault.mjs",
+		"demo": "node scripts/make-demo-vault.mjs && node scripts/deploy.mjs demo-vault"
 	},
 	"keywords": [
 		"obsidian",

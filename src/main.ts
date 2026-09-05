@@ -63,6 +63,16 @@ export default class TreeNavPlugin extends Plugin {
 		this.registerTreeCommands();
 
 		this.registerVaultEvents();
+
+		/*
+		 * A tree nobody can see is a plugin that appears not to have installed.
+		 * The first time this vault loads TreeNav there is nothing to disturb,
+		 * so the view is opened once; after that the workspace remembers what
+		 * the user actually wants and this stays out of it.
+		 */
+		if (!this.state.hasSavedState) {
+			this.app.workspace.onLayoutReady(() => void this.activateView());
+		}
 	}
 
 	onunload(): void {

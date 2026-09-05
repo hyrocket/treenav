@@ -659,6 +659,9 @@ const openLeaves = [];
 /** What the workspace reports as the note being edited. */
 let activeFile = null;
 
+/** Callbacks the plugin asked to run once the layout is up. */
+const layoutReady = [];
+
 const app = {
 	__viewFactories: new Map(),
 	vault: {
@@ -714,6 +717,10 @@ const app = {
 		on,
 		// Settable, so revealing the note being edited can be exercised.
 		getActiveFile: () => activeFile,
+		// Recorded rather than run: what matters is whether it was asked for.
+		onLayoutReady: (cb) => layoutReady.push(cb),
+		getLeftLeaf: () => null,
+		revealLeaf: async () => {},
 		getLeaf: () => ({ openFile: async () => {} }),
 		// The plugin fans work out to its open views through here, so the one the
 		// run creates has to be reachable.
@@ -825,6 +832,14 @@ if (dataArg && existsSync(dataArg)) {
 	};
 }
 await plugin.onload();
+
+// A vault that has used TreeNav before keeps whatever layout the user chose;
+// only a first run opens the view by itself.
+assert.equal(
+	layoutReady.length,
+	0,
+	"a vault with saved state should not have its view opened for it",
+);
 
 // The settings tab builds itself only when opened, so nothing else would run it.
 assert.ok(plugin.settingTab, "no settings tab was registered");

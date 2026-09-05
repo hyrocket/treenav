@@ -70,9 +70,13 @@ export class StateStore {
 
 	constructor(private readonly host: PersistHost) {}
 
+	/** False until `load` finds something, i.e. this vault has used TreeNav before. */
+	hasSavedState = false;
+
 	async load(): Promise<void> {
 		const raw = (await this.host.loadData()) as Partial<TreeNavData> | null;
 		if (!raw) return;
+		this.hasSavedState = true;
 
 		this.settings = normalizeSettings({ ...DEFAULT_SETTINGS, ...(raw.settings ?? {}) });
 		if (this.settings.rememberExpandedFolders && Array.isArray(raw.expandedFolders)) {
