@@ -1,8 +1,10 @@
 # TreeNav
 
 A unified navigation tree for Obsidian: folder notes, drag & drop, inline rename
-and (from Phase 2) per-item icons and colors, in one sidebar view that follows
-the look and density of the built-in file explorer.
+and per-item icons and colors, in one sidebar view that follows the look and
+density of the built-in file explorer.
+
+![The tree, with its context menu open](docs/screenshots/treenav_sc1.png)
 
 ## What it does
 
@@ -57,8 +59,18 @@ the look and density of the built-in file explorer.
 
 ## Screenshots
 
+Everything an item looks like, decided in one place and previewed on a copy of
+the row before anything is stored:
+
+![The Font & color dialog](docs/screenshots/treenav_sc3.png)
+
+Find a file by name, narrowed by kind, extension, modification date or tag.
+Choosing one opens it and puts the tree on it, opening the folders in the way:
+
+![Search, with its filters](docs/screenshots/treenav_sc4.png)
+
 Taken in the demo vault, which `npm run demo` builds from scratch. See
-[docs/screenshots](docs/screenshots) for what goes where.
+[docs/screenshots](docs/screenshots) for how they were taken.
 
 ## Design notes
 

@@ -13,12 +13,19 @@ Open `demo-vault` as a vault in Obsidian. TreeNav is already set up in it — th
 tree is open on the left, with icons, colours, a highlight, a hand-set order and
 the classic style all in place.
 
-| File | What it shows | How to get there |
+| File | What it shows | In the README |
 |---|---|---|
-| `tree.png` | The tree itself | The vault as it opens. Widen the sidebar to about 320px so no name is clipped. |
-| `font-and-color.png` | The appearance dialog | Right-click `Astrophysics` → **Font & color**. The preview at the top should be visible. |
-| `find.png` | Search and filters | The 🔍 button in the header, then type `mars`. |
-| `nesting.gif` | A note adopting another | Drag `Pulsars` onto the icon of a note; drag it back out and answer the prompt. Optional, and the most convincing one. |
+| `treenav_sc1.png` | The tree with its context menu open | Yes, at the top |
+| `treenav_sc2.png` | The icon picker, emoji and Lucide side by side | No — the Font & color dialog already stands for appearance |
+| `treenav_sc3.png` | Font & color: preview, colours, highlight, typeface | Yes |
+| `treenav_sc4.png` | Search with its four filters and the match count | Yes |
+
+Three are used. A README that opens with four full-window screenshots is read as
+an advertisement rather than a description.
+
+Still missing, and the most convincing thing here if it is ever taken: a short
+recording of a note adopting another one. Drag `Pulsars` onto a note's icon,
+then drag it back out and answer the prompt.
 
 ## Taking them
 

@@ -925,6 +925,9 @@ function orderedMenu(): Menu {
 		"open",
 		"action-primary",
 		"action",
+		// Not in the explorer's own list, but "Copy path" lands in it and would
+		// otherwise be pushed past our block and past Delete.
+		"clipboard",
 		"info",
 		"view",
 		"system",
