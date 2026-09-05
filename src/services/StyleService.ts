@@ -19,14 +19,9 @@ const FONT_STACKS: Record<FontToken, string> = {
 	monospace: "var(--font-monospace)",
 };
 
-/**
- * A stored typeface is a theme token or a font name the user typed. The value
- * goes through the CSSOM property setter, which parses it as a font-family and
- * ignores anything that is not one.
- */
+/** An unknown value resolves to nothing, leaving the row on the theme font. */
 export function resolveFontFamily(value: FontFamily | undefined): string {
-	if (!value) return "";
-	return FONT_STACKS[value as FontToken] ?? value;
+	return (value && FONT_STACKS[value]) ?? "";
 }
 const NOTE_ICON = "file-text";
 
@@ -91,9 +86,16 @@ export class StyleService {
 	 * never shifts a title out of line with its neighbours.
 	 */
 	applyToIcon(iconEl: HTMLElement, file: TAbstractFile): void {
+		this.renderIcon(iconEl, file, this.get(file.path)?.icon);
+	}
+
+	/**
+	 * Draws `icon` in the slot, falling back to the default for `file`. Taking
+	 * the icon as an argument lets a dialog preview one before it is stored.
+	 */
+	renderIcon(iconEl: HTMLElement, file: TAbstractFile, custom: string | undefined): void {
 		iconEl.empty();
 
-		const custom = this.get(file.path)?.icon;
 		if (custom) {
 			iconEl.removeClass("treenav-is-default-icon");
 			// An emoji is a glyph, not a registered icon: it goes in as text, and

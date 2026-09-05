@@ -11,10 +11,10 @@ import {
 } from "obsidian";
 import type TreeNavPlugin from "../main";
 import { ConfirmModal } from "../components/ConfirmModal";
+import { AppearanceModal } from "../components/AppearanceModal";
 import { FolderSuggestModal } from "../components/FolderSuggestModal";
 import { IconPickerModal } from "../components/IconPickerModal";
 import { startInlineRename } from "../components/InlineRename";
-import { ColorModal, FontModal } from "../components/StyleModals";
 import { TreeItem } from "../components/TreeItem";
 import { TreeRenderer, TreeRendererHost } from "../components/TreeRenderer";
 import { parentPath } from "../state/paths";
@@ -398,24 +398,20 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 	// --- Appearance --------------------------------------------------------
 
+	/** The quick path: the icon alone, without opening the whole dialog. */
 	promptIcon(item: TreeItem): void {
 		new IconPickerModal(this.app, this.plugin.styles.get(item.path)?.icon, (icon) =>
 			this.applyStyle(item.path, { icon }),
 		).open();
 	}
 
-	promptColor(item: TreeItem): void {
-		new ColorModal(
+	promptAppearance(item: TreeItem): void {
+		new AppearanceModal(
 			this.app,
+			item.file,
 			item.displayName,
-			this.plugin.styles.get(item.path)?.color,
-			(color) => this.applyStyle(item.path, { color }),
-		).open();
-	}
-
-	promptFont(item: TreeItem): void {
-		new FontModal(this.app, item.displayName, this.plugin.styles.get(item.path), (font) =>
-			this.applyStyle(item.path, font),
+			this.plugin.styles,
+			(style) => this.applyStyle(item.path, style),
 		).open();
 	}
 
@@ -432,16 +428,9 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 		menu.addItem((entry) =>
 			entry
-				.setTitle("Set color")
+				.setTitle("Appearance…")
 				.setIcon("palette")
-				.onClick(() => this.promptColor(item)),
-		);
-
-		menu.addItem((entry) =>
-			entry
-				.setTitle("Set font")
-				.setIcon("type")
-				.onClick(() => this.promptFont(item)),
+				.onClick(() => this.promptAppearance(item)),
 		);
 
 		if (styles.has(path)) {

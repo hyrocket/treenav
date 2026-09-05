@@ -234,17 +234,68 @@ input.treenav-rename-input {
 	font-size: var(--font-ui-smaller);
 }
 
+/* --- Appearance dialog ---------------------------------------------------- */
+
+/*
+ * The preview is a real tree row: it reuses the row rules, so what the dialog
+ * shows and what the tree draws cannot drift apart.
+ */
+.treenav-appearance-preview {
+	--treenav-depth: 0;
+	--treenav-row-height: 24px;
+	display: flex;
+	align-items: center;
+	min-height: 44px;
+	margin-bottom: var(--size-4-4);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+}
+
+.treenav-appearance-preview .treenav-item-self {
+	flex: 1 1 auto;
+	pointer-events: none;
+}
+
+.treenav-appearance-modal .setting-item {
+	padding: var(--size-2-3) 0;
+	border-top: none;
+}
+
+.treenav-appearance-footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-4);
+	margin-top: var(--size-4-4);
+	padding-top: var(--size-4-3);
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.treenav-appearance-footer .modal-button-container {
+	display: flex;
+	gap: var(--size-2-3);
+	margin: 0;
+}
+
+/* A pressed emphasis button, which Obsidian's button has no state for. */
+button.treenav-is-on {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
 /* --- Color swatches ------------------------------------------------------ */
 
 .treenav-swatch-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(32px, 1fr));
-	gap: var(--size-4-2);
-	margin-bottom: var(--size-4-4);
+	grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+	gap: var(--size-2-3);
+	margin-bottom: var(--size-4-3);
 }
 
 .treenav-swatch {
-	height: 32px;
+	height: 24px;
 	border-radius: var(--radius-s);
 	border: 1px solid var(--background-modifier-border);
 	cursor: var(--cursor);

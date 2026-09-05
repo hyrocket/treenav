@@ -117,11 +117,10 @@ export default class TreeNavPlugin extends Plugin {
 			},
 			{ id: "set-icon", name: "Set icon", run: onSelection((view, item) => view.promptIcon(item)) },
 			{
-				id: "set-color",
-				name: "Set color",
-				run: onSelection((view, item) => view.promptColor(item)),
+				id: "set-appearance",
+				name: "Set appearance",
+				run: onSelection((view, item) => view.promptAppearance(item)),
 			},
-			{ id: "set-font", name: "Set font", run: onSelection((view, item) => view.promptFont(item)) },
 			{
 				id: "move-up",
 				name: "Move item up",

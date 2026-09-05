@@ -30,8 +30,11 @@ the look and density of the built-in file explorer.
 
 **Appearance**
 
-- Per-item icon, color, typeface, weight, style and size, stored in plugin data
-  and never written into your notes
+- One **Appearance** dialog per item — icon, color, typeface, emphasis and size,
+  previewed on a live copy of the row and applied together
+- Stored in plugin data, never written into your notes
+- Typefaces are the theme's own (interface / text / monospace), so a styled item
+  looks right on any machine
 - Icons come from anything Obsidian has registered (Lucide and whatever other
   plugins added) or from an emoji, typed straight into the search box
 - A folder you made looks like a folder; a folder that came from nesting keeps

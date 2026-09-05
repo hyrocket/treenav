@@ -2,6 +2,7 @@ import { debounce } from "obsidian";
 import {
 	DATA_VERSION,
 	DEFAULT_SETTINGS,
+	FONT_TOKENS,
 	FlattenMode,
 	TreeNavData,
 	TreeNavSettings,
@@ -28,6 +29,21 @@ function normalizeSettings(settings: TreeNavSettings): TreeNavSettings {
 		settings.treeStyle = "classic";
 	}
 	return settings;
+}
+
+/**
+ * Styles written by earlier versions.
+ *
+ * A typeface used to accept any font name the user typed. Nothing can edit such
+ * a value now, so it is dropped and the row goes back to the theme font rather
+ * than keeping an appearance no dialog admits to.
+ */
+function normalizeStyle(style: TreeNavStyle): TreeNavStyle {
+	const family = style.fontFamily as string | undefined;
+	if (family && !(FONT_TOKENS as readonly string[]).includes(family)) {
+		delete style.fontFamily;
+	}
+	return style;
 }
 
 interface PersistHost {
@@ -63,7 +79,9 @@ export class StateStore {
 			this.expanded = new Set(raw.expandedFolders);
 		}
 		if (raw.styles) {
-			this.styles = new Map(Object.entries(raw.styles));
+			this.styles = new Map(
+				Object.entries(raw.styles).map(([path, style]) => [path, normalizeStyle(style)]),
+			);
 		}
 		if (raw.order) {
 			this.order = new Map(Object.entries(raw.order));

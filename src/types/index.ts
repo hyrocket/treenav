@@ -20,14 +20,14 @@ export const FONT_TOKENS = ["interface", "text", "monospace"] as const;
 export type FontToken = (typeof FONT_TOKENS)[number];
 
 /**
- * Either a token above, or any font stack the user typed.
+ * A typeface is one of the tokens above and nothing else.
  *
- * A token travels: it follows the theme and means the same thing on a machine
- * with different fonts installed. A literal name does not, but nothing stops
- * anyone from using one — CSS takes whatever it is given, and an unknown font
- * simply falls back.
+ * A token travels: it follows the theme, so it means the same thing on a
+ * machine with different fonts installed. Naming a font outright would not,
+ * and there is no way to offer the fonts a device actually has without asking
+ * the user to type a name and hope — so that is left out.
  */
-export type FontFamily = string;
+export type FontFamily = FontToken;
 
 export type FontWeight = "normal" | "bold";
 export type FontStyle = "normal" | "italic";
@@ -39,7 +39,6 @@ export type FontStyle = "normal" | "italic";
 export interface TreeNavStyle {
 	icon?: string;
 	color?: string;
-	/** A `FontToken`, or a literal font stack. */
 	fontFamily?: FontFamily;
 	fontWeight?: FontWeight;
 	fontStyle?: FontStyle;

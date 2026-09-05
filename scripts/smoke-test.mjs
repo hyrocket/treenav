@@ -130,14 +130,23 @@ class View extends Component {
 	}
 }
 class ItemView extends View {}
+/** Every dialog the run opens, so a test can reach into the last one. */
+const openedModals = [];
+
 class Modal {
 	constructor(app) {
 		this.app = app;
-		this.contentEl = document.createElement("div");
+		this.modalEl = document.createElement("div");
+		this.contentEl = this.modalEl.appendChild(document.createElement("div"));
 		this.titleEl = document.createElement("div");
 	}
-	open() {}
-	close() {}
+	open() {
+		openedModals.push(this);
+		this.onOpen?.();
+	}
+	close() {
+		this.onClose?.();
+	}
 }
 class FuzzySuggestModal extends Modal {
 	setPlaceholder() {}
@@ -177,7 +186,9 @@ class Plugin extends Component {
 	registerView(type, factory) {
 		this.app.__viewFactories.set(type, factory);
 	}
-	addSettingTab() {}
+	addSettingTab(tab) {
+		this.settingTab = tab;
+	}
 	addRibbonIcon() {
 		return document.createElement("div");
 	}
@@ -187,6 +198,137 @@ class Plugin extends Component {
 	}
 	async saveData(data) {
 		this.data = data;
+	}
+}
+
+/**
+ * The settings components, backed by real elements. A dialog that only pretends
+ * to build its controls proves nothing about the dialog.
+ */
+class ValueComponent {
+	constructor(el) {
+		this.el = el;
+		this.changeCb = null;
+	}
+	setValue(value) {
+		this.value = value;
+		return this;
+	}
+	getValue() {
+		return this.value;
+	}
+	onChange(cb) {
+		this.changeCb = cb;
+		return this;
+	}
+	/** What the user doing something to the control amounts to. */
+	change(value) {
+		this.setValue(value);
+		this.changeCb?.(value);
+	}
+	setDisabled() {
+		return this;
+	}
+	setPlaceholder() {
+		return this;
+	}
+	setLimits() {
+		return this;
+	}
+	setDynamicTooltip() {
+		return this;
+	}
+	addOptions(options) {
+		this.options = options;
+		return this;
+	}
+}
+
+class ButtonComponent {
+	constructor(containerEl) {
+		this.buttonEl = containerEl.createEl("button");
+	}
+	setButtonText(text) {
+		this.buttonEl.setText(text);
+		return this;
+	}
+	setIcon(icon) {
+		this.buttonEl.setAttribute("data-icon", icon);
+		return this;
+	}
+	setTooltip(text) {
+		this.buttonEl.setAttribute("aria-label", text);
+		return this;
+	}
+	setCta() {
+		this.buttonEl.addClass("mod-cta");
+		return this;
+	}
+	setWarning() {
+		this.buttonEl.addClass("mod-warning");
+		return this;
+	}
+	setClass(cls) {
+		this.buttonEl.addClass(cls);
+		return this;
+	}
+	setDisabled() {
+		return this;
+	}
+	onClick(cb) {
+		this.buttonEl.addEventListener("click", cb);
+		return this;
+	}
+}
+
+class Setting {
+	constructor(containerEl) {
+		this.settingEl = containerEl.createDiv({ cls: "setting-item" });
+		this.nameEl = this.settingEl.createDiv({ cls: "setting-item-name" });
+		this.descEl = this.settingEl.createDiv({ cls: "setting-item-description" });
+		this.controlEl = this.settingEl.createDiv({ cls: "setting-item-control" });
+		this.components = [];
+	}
+	setName(text) {
+		this.nameEl.setText(text);
+		return this;
+	}
+	setDesc(text) {
+		this.descEl.setText(text);
+		return this;
+	}
+	setHeading() {
+		return this;
+	}
+	addButton(cb) {
+		const button = new ButtonComponent(this.controlEl);
+		this.components.push(button);
+		cb(button);
+		return this;
+	}
+	addExtraButton(cb) {
+		return this.addButton(cb);
+	}
+	addToggle(cb) {
+		return this.addValue(cb);
+	}
+	addDropdown(cb) {
+		return this.addValue(cb);
+	}
+	addSlider(cb) {
+		return this.addValue(cb);
+	}
+	addColorPicker(cb) {
+		return this.addValue(cb);
+	}
+	addText(cb) {
+		return this.addValue(cb);
+	}
+	addValue(cb) {
+		const component = new ValueComponent(this.controlEl.createDiv());
+		this.components.push(component);
+		cb(component);
+		return this;
 	}
 }
 
@@ -208,43 +350,8 @@ const obsidianStub = {
 			notices.push(String(message));
 		}
 	},
-	Setting: class {
-		constructor(containerEl) {
-			this.containerEl = containerEl;
-		}
-		setName() {
-			return this;
-		}
-		setDesc() {
-			return this;
-		}
-		setHeading() {
-			return this;
-		}
-		addToggle(cb) {
-			cb({ setValue: () => ({ onChange: () => {} }) });
-			return this;
-		}
-		addDropdown(cb) {
-			cb({ addOptions: () => ({ setValue: () => ({ onChange: () => {} }) }) });
-			return this;
-		}
-		addButton(cb) {
-			cb({
-				setButtonText: () => ({ setWarning: () => ({ onClick: () => {} }), onClick: () => {}, setCta: () => ({ onClick: () => {} }) }),
-			});
-			return this;
-		}
-		addSlider() {
-			return this;
-		}
-		addExtraButton() {
-			return this;
-		}
-		addColorPicker() {
-			return this;
-		}
-	},
+	Setting,
+	ButtonComponent,
 	Platform: { isMacOS: false },
 	Keymap: { isModEvent: () => false },
 	setIcon: (el, icon) => {
@@ -414,6 +521,9 @@ function emit(name, ...args) {
 	for (const cb of listeners.get(name) ?? []) cb(...args);
 }
 
+/** Leaves the run has opened, in the shape `getLeavesOfType` reports. */
+const openLeaves = [];
+
 const app = {
 	__viewFactories: new Map(),
 	vault: {
@@ -460,7 +570,9 @@ const app = {
 		on,
 		getActiveFile: () => null,
 		getLeaf: () => ({ openFile: async () => {} }),
-		getLeavesOfType: () => [],
+		// The plugin fans work out to its open views through here, so the one the
+		// run creates has to be reachable.
+		getLeavesOfType: (type) => openLeaves.filter((leaf) => leaf.view?.getViewType?.() === type),
 		trigger: () => {},
 	},
 };
@@ -555,17 +667,35 @@ if (dataArg && existsSync(dataArg)) {
 		],
 		// Written by an older version, when this setting was a boolean.
 		settings: { flattenNestedFolders: true },
-		styles: { "Archive/2024": { icon: "lucide-folder", color: "var(--color-red)" } },
+		styles: {
+			"Archive/2024": {
+				icon: "lucide-folder",
+				color: "var(--color-red)",
+				// Written by a version that let a typeface be any font name.
+				fontFamily: "Comic Sans MS",
+			},
+		},
 		// Sixtoms is alphabetically after RE100; a manual order must win.
 		order: { "Projects/Sixtoms": 0, "Projects/RE100": 1 },
 	};
 }
 await plugin.onload();
 
+// The settings tab builds itself only when opened, so nothing else would run it.
+assert.ok(plugin.settingTab, "no settings tab was registered");
+plugin.settingTab.display();
+assert.ok(
+	plugin.settingTab.containerEl.querySelectorAll(".setting-item").length > 5,
+	"the settings tab did not build its rows",
+);
+
 const factory = app.__viewFactories.get("treenav-view");
 assert.ok(factory, "the view type was never registered");
 
-const view = factory({ app });
+const leaf = { app };
+const view = factory(leaf);
+leaf.view = view;
+openLeaves.push(leaf);
 await view.onOpen();
 
 const content = view.containerEl.children[1];
@@ -633,6 +763,12 @@ if (!vaultArg) {
 	const styled = content.querySelector('[data-path="Archive/2024"]');
 	assert.ok(styled, "the styled row is missing");
 	assert.equal(styled.style.color, "var(--color-red)", "a stored color was not applied");
+	// A typeface that is not a token can no longer be edited, so loading drops it.
+	assert.equal(
+		plugin.state.getStyle("Archive/2024").fontFamily,
+		undefined,
+		"a legacy font name should be dropped on load",
+	);
 }
 
 checkReservedNames(view, View, VIEW_RESERVED, "TreeNavView");
@@ -844,16 +980,65 @@ if (!vaultArg) {
 		"a typeface should resolve to a theme variable",
 	);
 
-	// A typed name is passed through as written, fallbacks and all.
+	// Only the tokens resolve. A font name from an older version is not one, and
+	// no dialog can edit it any more, so it must not reach the row.
 	plugin.styles.update("Welcome.md", { fontFamily: "Pretendard, Malgun Gothic, sans-serif" });
 	plugin.styles.applyToRow(probe, "Welcome.md");
-	assert.equal(
-		probe.style.fontFamily.replace(/"/g, ""),
-		"Pretendard, Malgun Gothic, sans-serif",
-		"a literal font stack should reach the row untouched",
-	);
+	assert.equal(probe.style.fontFamily, "", "a typed font stack should no longer apply");
 
 	plugin.styles.clear("Welcome.md");
+
+	// --- The appearance dialog ---------------------------------------------
+	//
+	// Driven through the real dialog rather than the service behind it: the
+	// point of merging colour and font into one place is that the controls and
+	// the preview agree, and only opening it can show that.
+
+	const item = view.renderer.itemsByPath.get("Welcome.md");
+	assert.ok(item, "the row to style is missing");
+
+	view.promptAppearance(item);
+	const modal = openedModals.at(-1);
+	const previewRow = modal.contentEl.querySelector(".treenav-appearance-preview .treenav-item-self");
+	assert.ok(previewRow, "the dialog should preview the row");
+	assert.equal(
+		previewRow.querySelector(".treenav-item-title").textContent,
+		"Welcome",
+		"the preview should carry the item's name",
+	);
+
+	const button = (icon) => modal.contentEl.querySelector(`button[data-icon="${icon}"]`);
+	button("bold").click();
+	assert.equal(previewRow.style.fontWeight, "bold", "the preview should follow the draft");
+	assert.equal(
+		plugin.styles.get("Welcome.md"),
+		undefined,
+		"nothing should be stored before Apply",
+	);
+
+	modal.contentEl.querySelector('.treenav-swatch[aria-label="Blue"]').click();
+	assert.equal(previewRow.style.color, "var(--color-blue)", "a swatch should reach the preview");
+
+	const named = (text) =>
+		[...modal.contentEl.querySelectorAll("button")].find((el) => el.textContent === text);
+	named("Apply").click();
+
+	const stored = plugin.styles.get("Welcome.md");
+	assert.equal(stored?.fontWeight, "bold", "Apply should store the emphasis");
+	assert.equal(stored?.color, "var(--color-blue)", "Apply should store the color");
+	const row = content.querySelector('[data-path="Welcome.md"]');
+	assert.equal(row.style.fontWeight, "bold", "the tree row should follow the dialog");
+
+	// Reset clears every property at once, including the icon.
+	plugin.styles.update("Welcome.md", { icon: "lucide-star" });
+	view.promptAppearance(view.renderer.itemsByPath.get("Welcome.md"));
+	const reopened = openedModals.at(-1);
+	[...reopened.contentEl.querySelectorAll("button")]
+		.find((el) => el.textContent === "Reset all")
+		.click();
+	assert.equal(plugin.styles.get("Welcome.md"), undefined, "Reset all should clear the style");
+	assert.equal(row.style.color, "", "the tree row should go back to the theme color");
+	console.log("appearance dialog: ok");
 
 	// The classic style is a class on the container, so it costs no re-render.
 	const treeEl = content.querySelector(".treenav-tree");
