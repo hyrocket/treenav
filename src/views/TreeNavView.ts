@@ -434,7 +434,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		);
 		menu.addItem((entry) =>
 			entry
-				.setTitle(`Font & color — ${count}`)
+				.setTitle(`Font & Color — ${count}`)
 				.setIcon("palette")
 				.onClick(() => this.promptAppearanceOf(files)),
 		);
@@ -561,7 +561,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 		menu.addItem((entry) =>
 			entry
-				.setTitle("Font & color")
+				.setTitle("Font & Color")
 				.setIcon("palette")
 				.onClick(() => this.promptAppearance(item)),
 		);
