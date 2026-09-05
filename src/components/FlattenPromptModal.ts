@@ -1,10 +1,14 @@
-import { App, Modal, Setting } from "obsidian";
+import { App, Modal } from "obsidian";
 
 export type FlattenDecision = "flatten" | "keep";
 
 /**
  * Asked when a folder TreeNav created by nesting is down to its own folder
  * note. Trashing a folder is hard to take back, so the choice is the user's.
+ *
+ * "Remember my choice" sits on the button row rather than in a settings-style
+ * row of its own: it modifies the button the user is about to press, and
+ * giving it equal weight to the decision reads like a separate question.
  *
  * Closing the dialog any other way keeps the folder — the outcome that changes
  * nothing.
@@ -25,26 +29,27 @@ export class FlattenPromptModal extends Modal {
 		this.titleEl.setText(`Turn "${this.folderName}" back into a note?`);
 
 		this.contentEl.createEl("p", {
-			text: `"${this.folderName}" has nothing left inside it but its own note. TreeNav created this folder when you nested something under that note.`,
-		});
-		this.contentEl.createEl("p", {
-			cls: "treenav-prompt-detail",
-			text: "Turning it back moves the note out and sends the empty folder to the trash. Keeping it leaves everything as it is.",
+			text: `Nothing is left inside "${this.folderName}" but its own note. Turning it back moves the note out and sends the empty folder to the trash.`,
 		});
 
-		new Setting(this.contentEl)
-			.setName("Don't ask again")
-			.setDesc("Remember this choice in settings. You can change it there later.")
-			.addToggle((toggle) => toggle.setValue(this.remember).onChange((value) => (this.remember = value)));
+		const footer = this.contentEl.createDiv({ cls: "treenav-prompt-footer" });
 
-		new Setting(this.contentEl)
-			.addButton((button) => button.setButtonText("Keep folder").onClick(() => this.finish("keep")))
-			.addButton((button) =>
-				button
-					.setButtonText("Turn back into a note")
-					.setCta()
-					.onClick(() => this.finish("flatten")),
-			);
+		const rememberEl = footer.createEl("label", { cls: "treenav-prompt-remember" });
+		const checkbox = rememberEl.createEl("input", { type: "checkbox" });
+		checkbox.addEventListener("change", () => (this.remember = checkbox.checked));
+		rememberEl.createSpan({ text: "Remember my choice" });
+
+		const buttons = footer.createDiv({ cls: "modal-button-container" });
+
+		const keepEl = buttons.createEl("button", { text: "Keep folder" });
+		keepEl.addEventListener("click", () => this.finish("keep"));
+
+		const flattenEl = buttons.createEl("button", {
+			cls: "mod-cta",
+			text: "Turn back into a note",
+		});
+		flattenEl.addEventListener("click", () => this.finish("flatten"));
+		flattenEl.focus();
 	}
 
 	onClose(): void {
