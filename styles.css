@@ -23,6 +23,19 @@
 	outline: none;
 }
 
+/*
+ * A finger needs more room than a mouse pointer. Obsidian marks its mobile app
+ * on the body, and the rest of the tree is laid out from these two variables.
+ */
+.is-mobile .treenav-view {
+	--treenav-row-height: 34px;
+	--treenav-indent: 20px;
+}
+
+.is-mobile .treenav-style-classic {
+	--treenav-row-height: 30px;
+}
+
 /* --- Rows ---------------------------------------------------------------- */
 
 .treenav-item-self {
@@ -161,6 +174,53 @@
 .treenav-tree.treenav-is-drop-target {
 	box-shadow: inset 0 0 0 1px var(--interactive-accent);
 	border-radius: var(--radius-s);
+}
+
+/* Held under a finger, waiting to be dragged or let go. */
+.treenav-item-self.treenav-is-held {
+	background-color: var(--background-modifier-hover);
+	box-shadow: 0 0 0 1px var(--background-modifier-border);
+}
+
+/*
+ * What is being dragged, drawn beside the pointer. Pointer events have no drag
+ * image of their own, and it carries the count when a whole selection moves.
+ */
+.treenav-drag-ghost {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: var(--layer-menu);
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-2);
+	max-width: 240px;
+	padding: var(--size-2-1) var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background-color: var(--background-secondary);
+	box-shadow: var(--shadow-s);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	opacity: 0.9;
+	pointer-events: none;
+}
+
+.treenav-drag-ghost-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.treenav-drag-ghost-count {
+	flex: 0 0 auto;
+	min-width: 16px;
+	padding: 0 var(--size-2-1);
+	border-radius: var(--radius-s);
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: var(--font-ui-smaller);
+	text-align: center;
 }
 
 /* --- Inline rename ------------------------------------------------------- */

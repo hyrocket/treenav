@@ -23,6 +23,7 @@ const { window } = dom;
 globalThis.window = window;
 globalThis.document = window.document;
 globalThis.Node = window.Node;
+globalThis.Element = window.Element;
 globalThis.HTMLElement = window.HTMLElement;
 globalThis.HTMLInputElement = window.HTMLInputElement;
 globalThis.requestAnimationFrame = (cb) => window.setTimeout(() => cb(0), 0);
@@ -151,25 +152,37 @@ class Modal {
 class FuzzySuggestModal extends Modal {
 	setPlaceholder() {}
 }
+/** Menus the run opened, so a gesture that should raise one can be checked. */
+const openedMenus = [];
+
 class Menu {
+	constructor() {
+		this.items = [];
+	}
 	addItem(cb) {
-		cb({
-			setTitle() {
+		const entry = {
+			setTitle(title) {
+				this.title = title;
 				return this;
 			},
 			setIcon() {
 				return this;
 			},
-			onClick() {
+			onClick(fn) {
+				this.click = fn;
 				return this;
 			},
-		});
+		};
+		cb(entry);
+		this.items.push(entry);
 		return this;
 	}
 	addSeparator() {
 		return this;
 	}
-	showAtMouseEvent() {}
+	showAtMouseEvent() {
+		openedMenus.push(this);
+	}
 }
 class PluginSettingTab {
 	constructor(app) {
@@ -1105,7 +1118,16 @@ assert.equal(view.renderer.getSelection().length, 1, "narrowing should leave one
 
 // --- Dragging what is selected -------------------------------------------
 
-/** jsdom measures nothing, so the drop zones have to be told where they are. */
+/**
+ * jsdom lays nothing out, so the rows have to be told where they are: the drag
+ * layer reads their boxes and asks what sits under the pointer.
+ */
+const placed = [];
+document.elementFromPoint = (x, y) => {
+	const hit = placed.find((row) => y >= row.top && y < row.top + 20);
+	return hit ? hit.el : null;
+};
+
 const placeRow = (path, box) => {
 	const row = rowFor(path);
 	row.getBoundingClientRect = () => ({
@@ -1124,32 +1146,29 @@ const placeRow = (path, box) => {
 		right: 46,
 		width: 16,
 	});
+	placed.unshift({ el: row, top: box.top });
 	return row;
 };
 
-const transfer = () => {
-	const store = new Map();
-	return {
-		setData: (type, value) => store.set(type, value),
-		getData: (type) => store.get(type) ?? "",
-		set effectAllowed(value) {},
-		set dropEffect(value) {},
-	};
-};
-
-const drag = (fromPath, toPath, point) => {
-	const data = transfer();
-	const start = new window.MouseEvent("dragstart", { bubbles: true });
-	Object.defineProperty(start, "dataTransfer", { value: data });
-	rowFor(fromPath).dispatchEvent(start);
-
-	const drop = new window.MouseEvent("drop", {
-		bubbles: true,
-		clientX: point.x,
-		clientY: point.y,
+/** A pointer event jsdom will carry; it has no PointerEvent of its own. */
+const pointer = (type, x, y, extra = {}) =>
+	Object.assign(new window.MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 }), {
+		pointerId: 1,
+		pointerType: "mouse",
+		...extra,
 	});
-	Object.defineProperty(drop, "dataTransfer", { value: data });
-	rowFor(toPath).dispatchEvent(drop);
+
+/** Press on one row, move to a point, release: the whole gesture. */
+const drag = (fromPath, point, extra = {}) => {
+	const from = rowFor(fromPath);
+	const box = placed.find((row) => row.el === from);
+	const startY = box ? box.top + 10 : 0;
+
+	from.dispatchEvent(pointer("pointerdown", 100, startY, extra));
+	// The first move is what turns a press into a drag.
+	window.dispatchEvent(pointer("pointermove", 100 + 10, startY, extra));
+	window.dispatchEvent(pointer("pointermove", point.x, point.y, extra));
+	window.dispatchEvent(pointer("pointerup", point.x, point.y, extra));
 };
 
 // Two notes in different folders, dragged into a third by grabbing one.
@@ -1163,7 +1182,7 @@ assert.ok(
 	rowFor("Welcome.md").classList.contains("treenav-is-selected"),
 	"the drag should start from a selected row",
 );
-drag("Welcome.md", "Archive", { x: 150, y: 50 });
+drag("Welcome.md", { x: 150, y: 50 });
 await new Promise((resolve) => setTimeout(resolve, 5));
 
 assert.equal(
@@ -1179,6 +1198,7 @@ assert.equal(
 
 // Dragging a row that is not selected carries that row and nothing else.
 view.rebuild();
+placed.length = 0;
 view.renderer.getItem("Archive").setExpanded(true);
 placeRow("Archive/Welcome.md", { top: 0 });
 placeRow("Archive/Meeting.md", { top: 20 });
@@ -1186,7 +1206,7 @@ placeRow("Projects", { top: 40 });
 
 click("Archive/Welcome.md");
 click("Archive/Meeting.md", { ctrlKey: true });
-drag("Projects", "Archive/Welcome.md", { x: 150, y: 5 });
+drag("Projects", { x: 150, y: 5 });
 await new Promise((resolve) => setTimeout(resolve, 5));
 
 assert.equal(
@@ -1201,5 +1221,137 @@ assert.equal(
 );
 
 console.log("multi-select drag: ok");
+
+// --- Touch gestures ----------------------------------------------------------
+//
+// A finger produces no HTML5 drag events at all, which is why the drag layer is
+// built on pointer events. The gesture differs from the mouse: press and hold,
+// then move to drag or let go for the menu.
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const TOUCH = { pointerType: "touch", pointerId: 2 };
+
+view.rebuild();
+placed.length = 0;
+view.renderer.getItem("Archive").setExpanded(true);
+placeRow("Archive/Welcome.md", { top: 0 });
+placeRow("Archive/Projects", { top: 20 });
+placeRow("Ideas", { top: 60 });
+
+// Moving straight away is a scroll, not a drag: nothing may be picked up.
+const before = byPath.get("Archive/Welcome.md").parent.path;
+rowFor("Archive/Welcome.md").dispatchEvent(pointer("pointerdown", 100, 10, TOUCH));
+window.dispatchEvent(pointer("pointermove", 100, 60, TOUCH));
+await wait(450);
+window.dispatchEvent(pointer("pointerup", 100, 60, TOUCH));
+await wait(5);
+assert.equal(
+	byPath.get("Archive/Welcome.md").parent.path,
+	before,
+	"a finger that moves straight away is scrolling, not dragging",
+);
+
+// Press, hold, then move: that is a drag.
+openedMenus.length = 0;
+rowFor("Archive/Welcome.md").dispatchEvent(pointer("pointerdown", 100, 10, TOUCH));
+await wait(450);
+assert.ok(
+	rowFor("Archive/Welcome.md").classList.contains("treenav-is-held"),
+	"the long press should show that the row is held",
+);
+assert.ok(
+	document.body.querySelector(".treenav-drag-ghost"),
+	"a held row should show what is being dragged",
+);
+window.dispatchEvent(pointer("pointermove", 100, 65, TOUCH));
+window.dispatchEvent(pointer("pointerup", 100, 65, TOUCH));
+await wait(5);
+
+assert.equal(
+	byPath.get("Ideas/Welcome.md")?.parent?.path,
+	"Ideas",
+	"a long press and a move should drop the row",
+);
+assert.ok(!document.body.querySelector(".treenav-drag-ghost"), "the preview should be cleaned up");
+assert.equal(openedMenus.length, 0, "a drag must not also open the menu");
+
+// Press, hold, let go without moving: that is the menu.
+view.rebuild();
+placed.length = 0;
+view.renderer.getItem("Ideas").setExpanded(true);
+placeRow("Ideas/Welcome.md", { top: 0 });
+
+rowFor("Ideas/Welcome.md").dispatchEvent(pointer("pointerdown", 100, 10, TOUCH));
+await wait(450);
+window.dispatchEvent(pointer("pointerup", 100, 10, TOUCH));
+await wait(5);
+
+assert.equal(openedMenus.length, 1, "holding and letting go should open the menu");
+assert.ok(
+	openedMenus[0].items.some((entry) => entry.title === "Rename"),
+	"the menu should be the row's own",
+);
+assert.equal(
+	byPath.get("Ideas/Welcome.md")?.parent?.path,
+	"Ideas",
+	"opening the menu must not move anything",
+);
+
+console.log("touch gestures: ok");
+
+// --- Escape gives a drag back ------------------------------------------------
+//
+// The browser did this for us while the drag was an HTML5 one; on pointer
+// events it has to be handled, or a drag begun by mistake has no way out.
+
+view.rebuild();
+placed.length = 0;
+view.renderer.getItem("Ideas").setExpanded(true);
+placeRow("Ideas/Welcome.md", { top: 0 });
+placeRow("Archive", { top: 40 });
+
+rowFor("Ideas/Welcome.md").dispatchEvent(pointer("pointerdown", 100, 10));
+window.dispatchEvent(pointer("pointermove", 110, 10));
+assert.ok(document.body.querySelector(".treenav-drag-ghost"), "the drag should have started");
+
+window.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+assert.ok(!document.body.querySelector(".treenav-drag-ghost"), "Escape should call the drag off");
+
+window.dispatchEvent(pointer("pointerup", 150, 50));
+await wait(5);
+assert.equal(
+	byPath.get("Ideas/Welcome.md")?.parent?.path,
+	"Ideas",
+	"a cancelled drag must leave the vault alone",
+);
+assert.equal(byPath.get("Archive/Welcome.md"), undefined, "a cancelled drag must not drop");
+
+console.log("drag cancel: ok");
+
+// --- One button for collapse and expand --------------------------------------
+
+const foldEl = content.querySelectorAll(".nav-action-button")[2];
+assert.ok(foldEl, "the fold button is missing");
+
+view.renderer.getItem("Archive").setExpanded(true);
+assert.ok(view.renderer.hasExpanded(), "something should be open to collapse");
+
+view.toggleFold();
+assert.ok(!view.renderer.hasExpanded(), "the button should have collapsed everything");
+assert.equal(foldEl.getAttribute("aria-label"), "Expand all", "it should now offer the opposite");
+assert.equal(
+	foldEl.querySelector(".svg-icon")?.getAttribute("data-icon"),
+	"chevrons-up-down",
+	"and say so with its icon",
+);
+
+view.toggleFold();
+assert.ok(
+	view.renderer.getItem("Archive/2024/Q1/Old note.md"),
+	"expanding should reach all the way down",
+);
+assert.equal(foldEl.getAttribute("aria-label"), "Collapse all", "it should offer the opposite again");
+
+console.log("fold toggle: ok");
 
 console.log("\nsmoke test passed");

@@ -9,7 +9,8 @@ the look and density of the built-in file explorer.
 **Navigation**
 
 - Sidebar view with a ribbon icon and an **Open TreeNav** command
-- Expand & collapse, remembered across restarts; active note highlighted
+- Expand & collapse, remembered across restarts; active note highlighted. One
+  header button collapses everything, or expands it when nothing is open
 - Keyboard navigation: arrows, `Enter`, `F2`, `Delete`, `Ctrl/⌘+N`, `Ctrl/⌘+Shift+N`
 - Multi-select with `Ctrl/⌘`+click and `Shift`+click, `Ctrl/⌘+A` for everything
   on screen, `Escape` to narrow back to one. Middle click opens in a new tab
@@ -31,6 +32,8 @@ the look and density of the built-in file explorer.
 - Inline rename, new note / new folder, **Move to…**, delete via trash
 - Drag, move, style or delete a whole selection at once; a target that suits
   only some of them takes those and leaves the rest where they are
+- Works the same on a phone: press and hold a row, then move to drag it or let
+  go to open its menu
 
 **Appearance**
 

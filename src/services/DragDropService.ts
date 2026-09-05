@@ -3,12 +3,19 @@ import { isSameOrDescendant } from "../state/paths";
 import { FileOpsService } from "./FileOpsService";
 import { OutlineService } from "./OutlineService";
 
-const MIME = "application/x-treenav-path";
+/** How long a finger has to rest on a row before it picks it up. */
+const LONG_PRESS_MS = 400;
+/** How far the mouse travels before a press becomes a drag. */
+const MOUSE_SLOP = 4;
+/** How far a finger may stray before the press is read as a scroll instead. */
+const TOUCH_SLOP = 10;
+/** How long the pointer rests on a collapsed folder before it opens. */
 const DWELL_MS = 600;
-/** A drag carries several paths; no path can contain a newline. */
-const SEPARATOR = "\n";
+/** How close to the edge of the tree the pointer scrolls it, and how fast. */
+const EDGE_PX = 40;
+const EDGE_SPEED = 8;
 
-/** Where a drop would put the dragged item, relative to the row under the pointer. */
+/** Where a drop would put the dragged items, relative to the row under the pointer. */
 export type DropMode = "into" | "nest" | "before" | "after";
 
 /** The subset of a row the drag layer needs; `TreeItem` satisfies it. */
@@ -17,27 +24,46 @@ export interface DropTargetRow {
 	readonly isFolder: boolean;
 	readonly rowEl: HTMLElement;
 	readonly iconEl: HTMLElement;
+	readonly displayName: string;
 	showDropIndicator(mode: DropMode | null): void;
 	setExpanded(expanded: boolean): void;
+	showContextMenu(event: MouseEvent): void;
+}
+
+/** A press that has not yet decided whether it is a click, a scroll or a drag. */
+interface Press {
+	row: DropTargetRow;
+	pointerId: number;
+	touch: boolean;
+	x: number;
+	y: number;
+	/** Set once the long press has fired: releasing now opens the menu. */
+	armed: boolean;
+	timer: number | null;
 }
 
 /**
- * Drag & drop between rows.
+ * Drag & drop between rows, driven by pointer events.
+ *
+ * Pointer events rather than HTML5 drag & drop: the HTML5 kind is a mouse-only
+ * protocol — a touch never produces `dragstart`, so on a phone the tree could
+ * not be rearranged at all. One pointer implementation covers mouse, pen and
+ * touch, and it also lets the drag carry a proper preview of what is moving.
+ *
+ * The gestures differ only in how a drag begins. A mouse starts one by moving a
+ * few pixels; a finger has to rest on the row first, because a finger that
+ * moves straight away is scrolling. Once the long press has fired, releasing
+ * without moving opens the row's menu — the same "press and hold, then move or
+ * let go" the platforms themselves use.
  *
  * A row is split into zones so one gesture can express three different intents:
- * dropping on a note's icon nests the dragged item under it, dropping on the
- * name inserts above or below it, and the middle of a folder row drops into the
- * folder. `dataTransfer` cannot be read during `dragover`, so the dragged items
- * are kept here for the duration of the drag — that is what lets an invalid
- * target refuse the drop before the pointer is released.
+ * pressing on a note's icon nests the dragged items under it, the name inserts
+ * above or below it, and the middle of a folder row drops into the folder.
  *
  * A drag carries a set, not one item: taking hold of a row that is part of the
  * selection takes the whole selection with it. A target that suits some of them
  * and not others is still offered, and the ones it does not suit stay where they
  * are — refusing the whole drop over one item would be the worse answer.
- *
- * Every row stops the drag events from bubbling, so an invalid target never
- * silently hands the drop to an ancestor.
  */
 export class DragDropService {
 	/**
@@ -46,8 +72,31 @@ export class DragDropService {
 	 */
 	resolveDragSet: ((file: TAbstractFile) => TAbstractFile[]) | null = null;
 
+	/** Finds the row element for a file. Set by the view, which owns the DOM. */
+	rowFor: ((file: TAbstractFile) => HTMLElement | null) | null = null;
+
+	/** Every attached row, so the one under the pointer can be found again. */
+	private readonly rows = new WeakMap<HTMLElement, DropTargetRow>();
+	private container: HTMLElement | null = null;
+
+	/**
+	 * The window the current gesture is happening in. Obsidian can pop a leaf
+	 * out into a window of its own, and that window has its own document — hit
+	 * testing and the drag preview have to happen in the right one.
+	 */
+	private doc: Document = document;
+	private win: Window = window;
+
+	private press: Press | null = null;
 	private sources: TAbstractFile[] = [];
+	private ghost: HTMLElement | null = null;
+
 	private indicated: DropTargetRow | null = null;
+	private dwellRow: DropTargetRow | null = null;
+	private dwellTimer: number | null = null;
+
+	private scrollFrame: number | null = null;
+	private scrollSpeed = 0;
 
 	constructor(
 		private readonly app: App,
@@ -55,128 +104,282 @@ export class DragDropService {
 		private readonly outline: OutlineService,
 	) {}
 
-	makeDraggable(el: HTMLElement, getFile: () => TAbstractFile): void {
-		el.draggable = true;
-
-		el.addEventListener("dragstart", (event) => {
-			const file = getFile();
-			const set = this.resolveDragSet?.(file) ?? [];
-			this.sources = set.length > 0 ? set : [file];
-			this.markDragging(true);
-
-			const transfer = event.dataTransfer;
-			if (!transfer) return;
-			const paths = this.sources.map((source) => source.path).join(SEPARATOR);
-			transfer.effectAllowed = "move";
-			transfer.setData(MIME, paths);
-			transfer.setData("text/plain", paths);
-		});
-
-		el.addEventListener("dragend", () => {
-			this.markDragging(false);
-			this.sources = [];
-			this.clearIndicator();
-		});
+	/** Wires a tree row up as both a drag source and a drop target. */
+	attachRow(row: DropTargetRow): void {
+		this.rows.set(row.rowEl, row);
+		row.rowEl.addEventListener("pointerdown", (event) => this.onPointerDown(event, row));
 	}
 
-	/** Marks every row being dragged, not just the one under the pointer. */
+	/** The vault root accepts drops on the empty space below the tree. */
+	attachRootTarget(el: HTMLElement): void {
+		this.container = el;
+	}
+
+	// --- The press ---------------------------------------------------------
+
+	private onPointerDown(event: PointerEvent, row: DropTargetRow): void {
+		// Left button only; the right one belongs to the context menu.
+		if (event.button !== 0 || this.press) return;
+		// An inline rename owns its own pointer: selecting text is not a drag.
+		if (event.target instanceof HTMLInputElement) return;
+
+		this.doc = row.rowEl.ownerDocument;
+		this.win = this.doc.defaultView ?? window;
+
+		const touch = event.pointerType === "touch";
+		this.press = {
+			row,
+			pointerId: event.pointerId,
+			touch,
+			x: event.clientX,
+			y: event.clientY,
+			armed: false,
+			timer: null,
+		};
+
+		if (touch) {
+			this.press.timer = this.win.setTimeout(() => this.arm(event), LONG_PRESS_MS);
+		}
+
+		this.win.addEventListener("pointermove", this.onPointerMove);
+		this.win.addEventListener("pointerup", this.onPointerUp);
+		this.win.addEventListener("pointercancel", this.onPointerCancel);
+		// Escape gives a drag back: the browser used to do this for us.
+		this.win.addEventListener("keydown", this.onKeyDown, true);
+		// A long press would otherwise raise the platform's own menu on top.
+		this.win.addEventListener("contextmenu", this.blockContextMenu, true);
+		// Non-passive: while a finger is dragging, the tree must not scroll under it.
+		this.win.addEventListener("touchmove", this.blockTouchScroll, { passive: false });
+	}
+
+	/** The long press landed: the row is now held, waiting to move or be let go. */
+	private arm(event: PointerEvent): void {
+		if (!this.press) return;
+		this.press.timer = null;
+		this.press.armed = true;
+		this.press.row.rowEl.addClass("treenav-is-held");
+		this.startDrag(event.clientX, event.clientY);
+	}
+
+	private onPointerMove = (event: PointerEvent): void => {
+		const press = this.press;
+		if (!press || event.pointerId !== press.pointerId) return;
+
+		if (this.sources.length === 0) {
+			const far = Math.hypot(event.clientX - press.x, event.clientY - press.y);
+			if (press.touch) {
+				// Moving before the long press means the finger is scrolling.
+				if (far > TOUCH_SLOP) this.reset();
+				return;
+			}
+			if (far < MOUSE_SLOP) return;
+			this.startDrag(event.clientX, event.clientY);
+			if (this.sources.length === 0) return;
+		}
+
+		event.preventDefault();
+		this.trackPointer(event.clientX, event.clientY);
+	};
+
+	private onPointerUp = (event: PointerEvent): void => {
+		const press = this.press;
+		if (!press || event.pointerId !== press.pointerId) return;
+
+		const dragging = this.sources.length > 0;
+		const moved = Math.hypot(event.clientX - press.x, event.clientY - press.y) > TOUCH_SLOP;
+		if (dragging) swallowNextClick(this.win);
+		const target = dragging ? this.rowAt(event.clientX, event.clientY) : null;
+		const mode = target ? this.resolveMode(event.clientX, event.clientY, target) : null;
+		const sources = this.sources;
+		const armed = press.armed;
+
+		this.reset();
+
+		if (dragging && sources.length > 0) {
+			if (target && mode) {
+				void this.execute(sources, target.file, mode);
+				return;
+			}
+			// Released over the tree but not over a row: the vault root.
+			if (!target && this.isOverContainer(event.clientX, event.clientY)) {
+				const root = this.app.vault.getRoot();
+				if (sources.some((source) => this.canMoveInto(source, root))) {
+					void this.moveAll(sources, root);
+					return;
+				}
+			}
+		}
+
+		// Held in place and let go: what a long press means everywhere else.
+		if (armed && !moved) press.row.showContextMenu(event);
+	};
+
+	private onPointerCancel = (event: PointerEvent): void => {
+		if (this.press && event.pointerId !== this.press.pointerId) return;
+		this.reset();
+	};
+
+	/** Escape abandons the drag, leaving the vault exactly as it was. */
+	private onKeyDown = (event: KeyboardEvent): void => {
+		if (event.key !== "Escape" || !this.press) return;
+		const dragging = this.sources.length > 0;
+		this.reset();
+		// Only swallow it when it actually called something off, so Escape still
+		// reaches the tree when nothing is being dragged.
+		if (dragging) {
+			event.preventDefault();
+			event.stopPropagation();
+		}
+	};
+
+	private blockContextMenu = (event: Event): void => {
+		// Only the one the long press itself raises; a real right-click has no press.
+		if (this.press?.touch) event.preventDefault();
+	};
+
+	private blockTouchScroll = (event: Event): void => {
+		if (this.sources.length > 0) event.preventDefault();
+	};
+
+	// --- The drag ----------------------------------------------------------
+
+	private startDrag(x: number, y: number): void {
+		const press = this.press;
+		if (!press) return;
+
+		const set = this.resolveDragSet?.(press.row.file) ?? [];
+		this.sources = set.length > 0 ? set : [press.row.file];
+		this.markDragging(true);
+		this.showGhost(press.row, x, y);
+		this.trackPointer(x, y);
+	}
+
+	/** Follows the pointer: the preview, the drop indicator and the edge scroll. */
+	private trackPointer(x: number, y: number): void {
+		if (this.ghost) {
+			this.ghost.style.transform = `translate(${x + 12}px, ${y + 12}px)`;
+		}
+
+		const row = this.rowAt(x, y);
+		const mode = row ? this.resolveMode(x, y, row) : null;
+
+		if (row && mode) this.setIndicator(row, mode);
+		else this.clearIndicator();
+
+		this.updateRootTarget(!row && this.isOverContainer(x, y));
+		this.updateDwell(row, mode);
+		this.updateEdgeScroll(y);
+	}
+
+	/** Empty space below the tree is the vault root, and says so. */
+	private updateRootTarget(over: boolean): void {
+		const root = this.app.vault.getRoot();
+		const takes = over && this.sources.some((source) => this.canMoveInto(source, root));
+		this.container?.toggleClass("treenav-is-drop-target", takes);
+	}
+
+	/** Hovering a collapsed folder opens it, so nested targets are reachable. */
+	private updateDwell(row: DropTargetRow | null, mode: DropMode | null): void {
+		const wants = mode === "into" && row?.isFolder ? row : null;
+		if (wants === this.dwellRow) return;
+
+		this.dwellRow = wants;
+		if (this.dwellTimer !== null) this.win.clearTimeout(this.dwellTimer);
+		this.dwellTimer = null;
+		if (!wants) return;
+
+		this.dwellTimer = this.win.setTimeout(() => {
+			this.dwellTimer = null;
+			wants.setExpanded(true);
+		}, DWELL_MS);
+	}
+
+	/** Dragging against the top or bottom edge scrolls the tree along. */
+	private updateEdgeScroll(y: number): void {
+		const el = this.container;
+		if (!el) return;
+
+		const rect = el.getBoundingClientRect();
+		if (rect.height === 0) return;
+
+		if (y < rect.top + EDGE_PX) this.scrollSpeed = -EDGE_SPEED;
+		else if (y > rect.bottom - EDGE_PX) this.scrollSpeed = EDGE_SPEED;
+		else this.scrollSpeed = 0;
+
+		if (this.scrollSpeed === 0 || this.scrollFrame !== null) return;
+
+		const step = () => {
+			if (this.scrollSpeed === 0 || this.sources.length === 0) {
+				this.scrollFrame = null;
+				return;
+			}
+			el.scrollTop += this.scrollSpeed;
+			this.scrollFrame = this.win.requestAnimationFrame(step);
+		};
+		this.scrollFrame = this.win.requestAnimationFrame(step);
+	}
+
+	/** The row under the pointer, or `null` for empty space. */
+	private rowAt(x: number, y: number): DropTargetRow | null {
+		const el = this.doc.elementFromPoint(x, y);
+		const rowEl = el instanceof Element ? el.closest(".treenav-item-self") : null;
+		if (!(rowEl instanceof HTMLElement)) return null;
+		return this.rows.get(rowEl) ?? null;
+	}
+
+	private isOverContainer(x: number, y: number): boolean {
+		const el = this.container;
+		if (!el) return false;
+		const rect = el.getBoundingClientRect();
+		return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+	}
+
+	/** A floating copy of what is moving, since nothing draws one for us. */
+	private showGhost(row: DropTargetRow, x: number, y: number): void {
+		const ghost = this.doc.body.createDiv({ cls: "treenav-drag-ghost" });
+		ghost.createSpan({ cls: "treenav-drag-ghost-name", text: row.displayName });
+		if (this.sources.length > 1) {
+			ghost.createSpan({ cls: "treenav-drag-ghost-count", text: String(this.sources.length) });
+		}
+		ghost.style.transform = `translate(${x + 12}px, ${y + 12}px)`;
+		this.ghost = ghost;
+	}
+
 	private markDragging(on: boolean): void {
 		for (const source of this.sources) {
 			this.rowFor?.(source)?.toggleClass("treenav-is-dragging", on);
 		}
 	}
 
-	/** Finds the row element for a file. Set by the view, which owns the DOM. */
-	rowFor: ((file: TAbstractFile) => HTMLElement | null) | null = null;
+	/** Puts everything back, whether the drag ended in a drop or in nothing. */
+	private reset(): void {
+		const press = this.press;
+		if (press && press.timer !== null) this.win.clearTimeout(press.timer);
+		press?.row.rowEl.removeClass("treenav-is-held");
 
-	/** Wires a tree row up as a drop target with all three zones. */
-	attachRow(row: DropTargetRow): void {
-		let dwellTimer: number | null = null;
+		this.markDragging(false);
+		this.sources = [];
+		this.press = null;
 
-		const stopDwell = () => {
-			if (dwellTimer === null) return;
-			window.clearTimeout(dwellTimer);
-			dwellTimer = null;
-		};
+		this.ghost?.detach();
+		this.ghost = null;
 
-		row.rowEl.addEventListener("dragover", (event) => {
-			event.stopPropagation();
+		this.clearIndicator();
+		this.container?.removeClass("treenav-is-drop-target");
+		if (this.dwellTimer !== null) this.win.clearTimeout(this.dwellTimer);
+		this.dwellTimer = null;
+		this.dwellRow = null;
 
-			const mode = this.resolveMode(event, row);
-			if (!mode) {
-				stopDwell();
-				if (this.indicated === row) this.clearIndicator();
-				return;
-			}
+		this.scrollSpeed = 0;
+		if (this.scrollFrame !== null) this.win.cancelAnimationFrame(this.scrollFrame);
+		this.scrollFrame = null;
 
-			event.preventDefault();
-			if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-			this.setIndicator(row, mode);
-
-			// Hovering a collapsed folder opens it, so nested targets are reachable.
-			if (mode === "into" && row.isFolder && dwellTimer === null) {
-				dwellTimer = window.setTimeout(() => {
-					dwellTimer = null;
-					row.setExpanded(true);
-				}, DWELL_MS);
-			} else if (mode !== "into") {
-				stopDwell();
-			}
-		});
-
-		row.rowEl.addEventListener("dragleave", (event) => {
-			// Ignore the leave events fired when crossing into a child element.
-			if (row.rowEl.contains(event.relatedTarget as Node | null)) return;
-			stopDwell();
-			if (this.indicated === row) this.clearIndicator();
-		});
-
-		row.rowEl.addEventListener("drop", (event) => {
-			event.stopPropagation();
-			stopDwell();
-			this.clearIndicator();
-
-			const mode = this.resolveMode(event, row);
-			const sources = this.resolveSources(event);
-			if (!mode || sources.length === 0) return;
-
-			event.preventDefault();
-			this.markDragging(false);
-			this.sources = [];
-			void this.execute(sources, row.file, mode);
-		});
-	}
-
-	/** The vault root accepts plain drops on empty space below the tree. */
-	attachRootTarget(el: HTMLElement): void {
-		const clear = () => el.removeClass("treenav-is-drop-target");
-
-		el.addEventListener("dragover", (event) => {
-			const root = this.app.vault.getRoot();
-			if (!this.sources.some((source) => this.canMoveInto(source, root))) {
-				clear();
-				return;
-			}
-			event.preventDefault();
-			if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-			el.addClass("treenav-is-drop-target");
-		});
-
-		el.addEventListener("dragleave", (event) => {
-			if (el.contains(event.relatedTarget as Node | null)) return;
-			clear();
-		});
-
-		el.addEventListener("drop", (event) => {
-			clear();
-			const root = this.app.vault.getRoot();
-			const sources = this.resolveSources(event);
-			if (!sources.some((source) => this.canMoveInto(source, root))) return;
-			event.preventDefault();
-			this.markDragging(false);
-			this.sources = [];
-			void this.moveAll(sources, root);
-		});
+		this.win.removeEventListener("pointermove", this.onPointerMove);
+		this.win.removeEventListener("pointerup", this.onPointerUp);
+		this.win.removeEventListener("pointercancel", this.onPointerCancel);
+		this.win.removeEventListener("keydown", this.onKeyDown, true);
+		this.win.removeEventListener("contextmenu", this.blockContextMenu, true);
+		this.win.removeEventListener("touchmove", this.blockTouchScroll);
 	}
 
 	// --- Intent ------------------------------------------------------------
@@ -185,14 +388,14 @@ export class DragDropService {
 	 * Reads the pointer position and returns the intent, or `null` to refuse.
 	 * An intent stands if it suits any one of the dragged items.
 	 */
-	private resolveMode(event: DragEvent, row: DropTargetRow): DropMode | null {
+	private resolveMode(x: number, y: number, row: DropTargetRow): DropMode | null {
 		const sources = this.sources;
 		// Dropping a set onto one of its own members means nothing.
 		if (sources.length === 0 || sources.includes(row.file)) return null;
 
 		const rect = row.rowEl.getBoundingClientRect();
 		if (rect.height === 0) return null;
-		const ratio = (event.clientY - rect.top) / rect.height;
+		const ratio = (y - rect.top) / rect.height;
 		const any = (test: (source: TAbstractFile) => boolean) => sources.some(test);
 
 		if (row.isFolder) {
@@ -203,7 +406,7 @@ export class DragDropService {
 		}
 
 		const icon = row.iconEl.getBoundingClientRect();
-		if (event.clientX >= icon.left - 4 && event.clientX <= icon.right + 4) {
+		if (x >= icon.left - 4 && x <= icon.right + 4) {
 			return any((source) => this.canNest(source, row.file as TFile)) ? "nest" : null;
 		}
 
@@ -266,10 +469,7 @@ export class DragDropService {
 
 	// --- Indicator ---------------------------------------------------------
 
-	/**
-	 * Only one row is ever marked. Rows stop drag events from bubbling, so a
-	 * stale marker would otherwise be left behind when the pointer moves on.
-	 */
+	/** Only one row is ever marked, so no stale marker is left behind. */
 	private setIndicator(row: DropTargetRow, mode: DropMode): void {
 		if (this.indicated && this.indicated !== row) this.indicated.showDropIndicator(null);
 		this.indicated = row;
@@ -280,19 +480,23 @@ export class DragDropService {
 		this.indicated?.showDropIndicator(null);
 		this.indicated = null;
 	}
+}
 
-	/**
-	 * The dragged items. The live list is authoritative; the transfer data is
-	 * the fallback for a drag this instance did not see start.
-	 */
-	private resolveSources(event: DragEvent): TAbstractFile[] {
-		if (this.sources.length > 0) return this.sources;
-
-		const data = event.dataTransfer?.getData(MIME);
-		if (!data) return [];
-		return data
-			.split(SEPARATOR)
-			.map((path) => this.app.vault.getAbstractFileByPath(path))
-			.filter((file): file is TAbstractFile => file !== null);
-	}
+/**
+ * Eats the click the browser fires after the pointer is released, so a drag
+ * that ended on a row does not also open it. Removed on a timer in case no
+ * click follows at all, which is what happens after a touch drag.
+ */
+function swallowNextClick(win: Window): void {
+	const swallow = (event: MouseEvent) => {
+		event.preventDefault();
+		event.stopPropagation();
+		done();
+	};
+	const done = () => {
+		win.removeEventListener("click", swallow, true);
+		win.clearTimeout(timer);
+	};
+	const timer = win.setTimeout(done, 300);
+	win.addEventListener("click", swallow, true);
 }

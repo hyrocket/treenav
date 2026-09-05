@@ -82,7 +82,6 @@ export class TreeItem implements DropTargetRow {
 		});
 		this.rowEl.addEventListener("contextmenu", (event) => this.ctx.handleContextMenu(this, event));
 
-		this.ctx.dnd.makeDraggable(this.rowEl, () => this.file);
 		this.ctx.dnd.attachRow(this);
 
 		this.ctx.registerItem(this);
@@ -133,6 +132,11 @@ export class TreeItem implements DropTargetRow {
 		if (!this.expanded) return;
 		this.destroyChildren();
 		this.buildChildren();
+	}
+
+	/** Opened by the drag layer when a press is held and let go without moving. */
+	showContextMenu(event: MouseEvent): void {
+		this.ctx.handleContextMenu(this, event);
 	}
 
 	/** Paints the pending drop: an insertion line, or a highlight on the target. */

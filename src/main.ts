@@ -106,6 +106,11 @@ export default class TreeNavPlugin extends Plugin {
 			{ id: "new-note", name: "New note", run: (view) => view.newNote() },
 			{ id: "new-folder", name: "New folder", run: (view) => view.newFolder() },
 			{
+				id: "toggle-fold",
+				name: "Collapse or expand all",
+				run: (view) => view.toggleFold(),
+			},
+			{
 				id: "rename",
 				name: "Rename item",
 				run: onSelection((view, item) => view.renameItem(item)),

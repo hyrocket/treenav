@@ -13,6 +13,8 @@ export interface TreeRendererHost {
 	/** A click that only changed the selection, opening nothing. */
 	onSelectionClick(item: TreeItem): void;
 	onItemAuxClick(item: TreeItem, event: MouseEvent): void;
+	/** Something opened or closed; the header button may now mean the opposite. */
+	onFoldChanged(): void;
 }
 
 /** Path used for the vault root throughout the renderer. */
@@ -66,6 +68,7 @@ export class TreeRenderer implements TreeContext {
 
 	setExpanded(path: string, expanded: boolean): void {
 		this.state.setExpanded(path, expanded);
+		this.host.onFoldChanged();
 	}
 
 	registerItem(item: TreeItem): void {
@@ -293,6 +296,28 @@ export class TreeRenderer implements TreeContext {
 			return single ? [single] : [];
 		}
 		return this.getVisibleItems().filter((item) => this.selection.has(item.path));
+	}
+
+	/**
+	 * Expands every folder, top down: opening one builds its children, which is
+	 * what gives the walk the next level to open.
+	 */
+	expandAll(): void {
+		const walk = (items: TreeItem[]) => {
+			for (const item of items) {
+				if (!item.isFolder) continue;
+				item.setExpanded(true);
+				walk(item.children);
+			}
+		};
+		walk(this.rootChildren);
+	}
+
+	/** Whether anything is open, which is what the one header button switches on. */
+	hasExpanded(): boolean {
+		const some = (items: TreeItem[]): boolean =>
+			items.some((item) => (item.isFolder && item.isExpanded) || some(item.children));
+		return some(this.rootChildren);
 	}
 
 	/** Collapses every expanded folder, deepest first so no state is left behind. */

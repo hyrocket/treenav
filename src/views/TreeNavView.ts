@@ -85,11 +85,11 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		// Dragging a selected row takes the whole selection; dragging anything
 		// else replaces the selection first, so what moves is what is lit up.
 		//
-		// The drag layer is shared by every open TreeNav, so the tree the drag
+		// The drag layer is shared by every open TreeNav, so the tree the gesture
 		// started in claims it here — in the capture phase, before the row's own
 		// handler asks for the set.
 		treeEl.addEventListener(
-			"dragstart",
+			"pointerdown",
 			() => {
 				this.plugin.dnd.resolveDragSet = (file) => this.dragSetFor(file);
 				this.plugin.dnd.rowFor = (file) => this.renderer?.getItem(file.path)?.rowEl ?? null;
@@ -101,6 +101,8 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	}
 
 	async onClose(): Promise<void> {
+		if (this.foldFrame !== null) window.cancelAnimationFrame(this.foldFrame);
+		this.foldFrame = null;
 		this.renderer?.destroy();
 		this.renderer = null;
 		this.keymap = null;
@@ -112,6 +114,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		this.applyTreeStyle();
 		this.renderer?.render();
 		this.renderer?.setActiveFile(this.app.workspace.getActiveFile());
+		this.updateFoldButton();
 	}
 
 	/** Switches between flat indentation and classic connector lines. */
@@ -133,6 +136,9 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 
 	// --- Wiring ------------------------------------------------------------
 
+	private foldEl: HTMLElement | null = null;
+	private foldFrame: number | null = null;
+
 	private buildHeader(container: HTMLElement): void {
 		const header = container.createDiv({ cls: "nav-header treenav-header" });
 		const actions = header.createDiv({ cls: "nav-buttons-container" });
@@ -142,11 +148,35 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 			el.setAttribute("aria-label", label);
 			setIcon(el, icon);
 			el.addEventListener("click", onClick);
+			return el;
 		};
 
 		button("file-plus", "New note", () => void this.createNote(this.getTargetFolder()));
 		button("folder-plus", "New folder", () => void this.createFolder(this.getTargetFolder()));
-		button("chevrons-down-up", "Collapse all", () => this.renderer?.collapseAll());
+
+		// One button rather than two: collapsing and expanding are the same
+		// question asked from opposite ends, and it always offers the one that
+		// would do something.
+		this.foldEl = button("chevrons-down-up", "Collapse all", () => this.toggleFold());
+		this.updateFoldButton();
+	}
+
+	/** Collapses everything, or expands it all when nothing is open. */
+	toggleFold(): void {
+		const renderer = this.renderer;
+		if (!renderer) return;
+		if (renderer.hasExpanded()) renderer.collapseAll();
+		else renderer.expandAll();
+		this.updateFoldButton();
+	}
+
+	private updateFoldButton(): void {
+		const el = this.foldEl;
+		if (!el) return;
+		const open = this.renderer?.hasExpanded() ?? false;
+		el.empty();
+		setIcon(el, open ? "chevrons-down-up" : "chevrons-up-down");
+		el.setAttribute("aria-label", open ? "Collapse all" : "Expand all");
 	}
 
 	private registerVaultEvents(): void {
@@ -287,6 +317,18 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		}
 
 		item.toggle();
+	}
+
+	/**
+	 * Expanding a whole tree fires this once per folder, so the walk that reads
+	 * the state happens once a frame rather than once an item.
+	 */
+	onFoldChanged(): void {
+		if (this.foldFrame !== null) return;
+		this.foldFrame = window.requestAnimationFrame(() => {
+			this.foldFrame = null;
+			this.updateFoldButton();
+		});
 	}
 
 	/** A modifier click only moves the selection around; nothing is opened. */
