@@ -644,48 +644,115 @@ Obsidian은 업데이트를 AppData에 새 asar로 받는다. 설치 폴더의 �
 
 **둘 다 코드 변경 없음.** 사용자 환경 차이를 우리 버그로 오인하지 않으려면 먼저
 `appearance.json`을 봐야 한다는 걸 기록해 둔다.
+## 2026-09-06 (5) — Yesterday, 그리고 배포처를 하나 빠뜨린 일
+
+### Yesterday를 넣었더니 Today가 달력이 됐다
+
+실사용에서 나온 요청. 나이 필터가 `Any time · Today · Past week · Past month`인데
+업무에서 정말 자주 묻는 건 **어제 뭘 건드렸나**다. `Today` 밑에 `Yesterday`를 넣었다.
+
+한 줄 추가로 끝나지 않았다. 기존 `today`는 **롤링 24시간**이었다(`AGE_DAYS = { today: 1 }`).
+거기에 달력 하루짜리 `Yesterday`를 붙이면 오전 10시에 *어제 오후 3시 파일*이 두 레이블
+모두에 걸린다. 그러면 `Yesterday`는 "끝난 하루"라는 뜻을 잃는다 — 그게 그 항목을 고르는
+이유인데도.
+
+그래서 하한 하나(`ageCutoff`)를 창(`ageWindow → { from, to }`)으로 바꿨다.
+
+| | 뜻 |
+|---|---|
+| Today | 오늘 자정부터 지금까지 |
+| Yesterday | 어제 자정부터 오늘 자정까지 (`[from, to)`) |
+| Past week / month | 지금부터 7일 / 30일 전까지 — **롤링 유지** |
+
+`Past`라고 적힌 둘은 롤링이 말 그대로다. 달력이 되어야 하는 건 날짜 이름을 가진 둘뿐이다.
+
+어제 경계는 24시간을 빼지 않고 `setDate(getDate() - 1)`로 날짜를 물린다. 서머타임이
+있는 로캘에서 밤새 시계가 바뀌면 경계가 한 시간 어긋나기 때문이다. 한국에는 없지만
+`Date`는 사용자 로캘을 따라 돈다.
+
+스모크에 세 가지를 세웠다: 방금 쓴 파일은 Today이고 Yesterday가 아니다 → mtime을
+어제 정오로 돌리면 그대로 뒤집힌다 → 그래도 Past week에는 여전히 걸린다.
+
+### 배포처를 하나 빠뜨렸다
+
+빌드하고 `npm run deploy`만 했다. 그 스크립트의 기본 타깃은 `test-vault`다. 사용자는
+실사용 볼트를 열었고, 거기엔 이전 빌드가 그대로 있었으므로 `Yesterday`가 없었다.
+
+**코드 문제가 아니라 배포 문제였다.** 이런 건 "왜 안 나오지"로 들어와서 버그 조사로
+번지기 쉽다. 앞으로 빌드가 통과하면 양쪽 모두에 넣는다.
+
+```bash
+npm run deploy
+npm run deploy -- "D:/Obsidian_Files/Obsidian_HY"
+```
+
+### 1.0 기능 동결
+
+지금 기능으로 1.0.0을 낸다. 실사용에서 나오는 **버그**만 고치고, 기능 추가는 다음
+버전으로 넘긴다. 숨기기와 Favorite/Pin은 1.1.0이다. 넣기 시작하면 릴리스가 계속
+뒤로 밀리고, 그 사이 1.0.0은 영원히 "거의 다 된" 상태로 남는다.
+
+### 커뮤니티 등록은 이제 PR이 아니다
+
+이전 기록에 "`obsidianmd/obsidian-releases`에 `community-plugins.json` PR"이라고
+적어뒀는데 **더 이상 그 경로가 아니다.** 공식 문서 확인 결과 지금은 포털이다.
+
+1. <https://community.obsidian.md>에 **Obsidian 계정**으로 로그인
+2. GitHub 계정을 연결해 저장소 소유를 확인
+3. 디렉터리 화면에서 플러그인 추가
+
+중요한 제약 하나: 디렉터리는 **기본 브랜치 HEAD의 `manifest.json`**을 읽고, 실제 파일은
+**manifest의 `version`과 같은 이름의 태그**에 붙은 릴리스에서 받아간다. 태그와 manifest가
+어긋나면 목록에는 떠도 설치가 실패한다. `id`에 "obsidian"이 들어가면 안 되는데 우리는
+`treenav`라 문제없다.
+
+**`gh` CLI는 더 이상 필요 없다.** 릴리스는 GitHub 웹에서 만들면 되고, PR도 없다.
+
+### 심사 가이드라인 자체 점검
+
+`src/`를 훑었다. 자주 지적되는 항목은 전부 깨끗하다.
+
+- `innerHTML` / `outerHTML` / `insertAdjacentHTML` — 없음 (전부 `createEl` 계열)
+- `workspace.activeLeaf` 직접 접근 — 없음
+- 전역 `app` — 없음 (`this.app`만)
+- `vault.adapter` — 없음 (Vault API만)
+- `var`, 기본 단축키, `console.*` — 없음
+- 설정 탭은 `new Setting(...).setHeading()`, 제목에 "settings" 없음, 문장형 대문자
+- 사용자 경로에 `normalizePath()` 적용
+
+유일하게 걸릴 수 있는 건 `el.style.*`이다. 하지만 그 값들은 **사용자가 고른 색·폰트**와
+드래그 고스트의 좌표다 — 값이 사용자 데이터라서 CSS 클래스로 미리 만들어 둘 수가 없다.
+지적을 받으면 그렇게 답하면 된다.
 
 ### 배포 상태
 
-- GitHub: <https://github.com/hyrocket/treenav> — main 최신
-- 실사용 볼트 `D:\Obsidian_Files\Obsidian_HY`에 설치, 실사용 테스트 시작
-- **태그와 릴리스는 아직 만들지 않았다.** 실사용에서 고칠 게 나오면 1.0.0을 다시 만들어야
-  하므로, 테스트가 끝난 뒤에 태그 → 릴리스(main.js·manifest.json·styles.css 첨부) 순서로 간다
+- GitHub: <https://github.com/hyrocket/treenav> — 커밋 하나(`Ask about yesterday…`) 미푸시
+- `test-vault`와 실사용 볼트 `D:\Obsidian_Files\Obsidian_HY` 양쪽에 1.0.0 최신 설치됨
+- **태그와 릴리스는 아직 없다.** 실사용 테스트 중 — 나오는 버그를 고친 뒤 태그 → 릴리스
 
 ### 남은 작업
 
-**공개 전에 해야 하는 것**
+**1.0.0 공개까지**
 
-1. **실사용 테스트** — 진행 중. 걸리는 것을 모아 고친 뒤 다음으로 넘어간다.
-2. **태그 + GitHub 릴리스** — 태그는 `v` 없이 `1.0.0`. main.js · manifest.json ·
-   styles.css 세 파일을 릴리스에 첨부해야 심사를 통과한다.
-3. **커뮤니티 플러그인 등록 PR** — `obsidianmd/obsidian-releases`. `gh` CLI가 아직 없다.
+1. **실사용 테스트** — 진행 중. 버그만 모아 고친다 (기능 추가는 하지 않는다)
+2. **push + 태그** — 태그는 `v` 없이 `1.0.0`, manifest의 version과 정확히 같아야 한다
+3. **GitHub 릴리스** — `main.js` · `manifest.json` · `styles.css` 세 파일을 **바이너리 첨부**로
+   (저장소 안에 있는 것과 별개로 릴리스에 붙어 있어야 설치가 된다)
+4. **community.obsidian.md에서 등록** — 위 절차대로
 
 **실기기 확인이 남은 것**
 
 - 모바일 드래그는 하네스(jsdom)에서만 검증했다. 실제 폰에서 길게 누르기 타이밍(400ms),
-  스크롤과의 충돌, 고스트 위치를 한 번 봐야 한다. 데스크톱은 실사용으로 확인됨.
+  스크롤과의 충돌, 고스트 위치를 한 번 봐야 한다. 데스크톱은 실사용으로 확인됨
 
-**Phase 3 잔여**
+**1.1.0으로 미룬 것**
 
 - 특정 파일·폴더 숨기기
 - Favorite / Pin (필터의 "핀만 보기"로 이어짐)
-
-(검색 / 필터, Manual Sorting, Tree 표시 옵션은 완료)
-
-**그 외 빈틈**
-
 - 키보드 타입어헤드
 - 폴더 노트가 없는 폴더는 검색되지 않음
 - 아이콘 선택기 다단에서 위/아래 화살표가 격자 감각과 어긋남
-- 트리 전체 글꼴 설정은 없음 (항목별로만). 사용자가 "필요 없다"고 판단
 - ESLint 설정 없음
-
-**완료된 것 (이전 목록에서 지움)**
-
-- 대용량 성능 측정 → 접힌 렌더는 볼트 크기와 무관하게 11–19ms. 5,000개 실사용 확인
-- 활성 노트로 자동 스크롤 → 커맨드 + 설정(기본 꺼짐)으로 구현
-- 모바일 드래그 → 포인터 이벤트로 재작성
 
 ### 재개 방법
 
@@ -700,9 +767,9 @@ npm run smoke -- --vault test-vault --data test-vault/.obsidian/plugins/treenav/
 Obsidian에서 `D:\dev_projects\006_treenav_obsidian_plugin\test-vault`를 vault로
 열고, 코드 수정 후 `Ctrl+P` → **Reload app without saving**.
 
-실제 vault는 `D:\Obsidian_Files\Obsidian_HY` — `notebook-navigator`,
-`manual-sorting`, `file-explorer-note-count`가 이미 설치돼 있어 탐색기 영역이
-겹친다. 기능 검증은 test-vault에서 하는 편이 정확하다.
+기능 검증은 test-vault에서 하는 편이 정확하다 — 실사용 볼트에는 `notebook-navigator`,
+`manual-sorting`, `file-explorer-note-count`가 이미 설치돼 있어 탐색기 영역이 겹친다.
+다만 **빌드가 통과하면 실사용 볼트에도 같이 배포한다**(위 "배포처를 하나 빠뜨렸다").
 
 ### 저장소
 
