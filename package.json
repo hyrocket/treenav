@@ -1,7 +1,7 @@
 {
 	"name": "treenav",
 	"version": "1.0.0",
-	"description": "Unified navigation tree for Obsidian.",
+	"description": "A unified file tree for navigation: a file explorer with folder notes, note nesting by drag and drop, manual sorting, keyboard navigation, search, and per-item icons, colors and fonts.",
 	"main": "main.js",
 	"private": true,
 	"scripts": {

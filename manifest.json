@@ -3,7 +3,7 @@
 	"name": "TreeNav",
 	"version": "1.0.0",
 	"minAppVersion": "1.8.7",
-	"description": "Unified navigation tree: folder notes, note nesting by drag, manual ordering, and per-item icons, colors and fonts.",
+	"description": "A unified file tree for navigation: a file explorer with folder notes, note nesting by drag and drop, manual sorting, keyboard navigation, search, and per-item icons, colors and fonts.",
 	"author": "HY",
 	"isDesktopOnly": false
 }
