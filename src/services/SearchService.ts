@@ -4,7 +4,7 @@ import { App, TFile, getAllTags } from "obsidian";
 export type SearchKind = "any" | "notes" | "attachments";
 
 /** How recently a file must have been modified. */
-export type SearchAge = "any" | "today" | "week" | "month";
+export type SearchAge = "any" | "today" | "yesterday" | "week" | "month";
 
 export interface SearchFilters {
 	kind: SearchKind;
@@ -30,7 +30,7 @@ export interface SearchResult {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const AGE_DAYS: Record<Exclude<SearchAge, "any">, number> = { today: 1, week: 7, month: 30 };
+const AGE_DAYS: Record<"week" | "month", number> = { week: 7, month: 30 };
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
@@ -59,11 +59,11 @@ export class SearchService {
 	 */
 	search(query: string, filters: SearchFilters, limit: number): SearchResult {
 		const needle = query.trim().toLowerCase();
-		const cutoff = ageCutoff(filters.age);
+		const age = ageWindow(filters.age);
 		const matches: { file: TFile; rank: number }[] = [];
 
 		for (const file of this.app.vault.getFiles()) {
-			if (!this.passes(file, filters, cutoff)) continue;
+			if (!this.passes(file, filters, age)) continue;
 			const rank = needle ? rankOf(file, needle) : 0;
 			if (rank < 0) continue;
 			matches.push({ file, rank });
@@ -104,11 +104,11 @@ export class SearchService {
 		return (getAllTags(cache) ?? []).map((tag) => tag.replace(/^#/, ""));
 	}
 
-	private passes(file: TFile, filters: SearchFilters, cutoff: number): boolean {
+	private passes(file: TFile, filters: SearchFilters, age: { from: number; to: number }): boolean {
 		if (filters.kind === "notes" && file.extension !== "md") return false;
 		if (filters.kind === "attachments" && file.extension === "md") return false;
 		if (filters.extension && file.extension !== filters.extension) return false;
-		if (cutoff && file.stat.mtime < cutoff) return false;
+		if (file.stat.mtime < age.from || file.stat.mtime >= age.to) return false;
 
 		if (filters.tag) {
 			const wanted = filters.tag.toLowerCase();
@@ -131,8 +131,28 @@ function rankOf(file: TFile, needle: string): number {
 	return -1;
 }
 
-/** The oldest modification time still allowed, or 0 when any will do. */
-function ageCutoff(age: SearchAge): number {
-	if (age === "any") return 0;
-	return Date.now() - AGE_DAYS[age] * DAY_MS;
+/**
+ * The modification times an age filter admits, as `[from, to)`.
+ *
+ * "Today" and "Yesterday" are calendar days rather than the last 24 and 48
+ * hours. At ten in the morning a rolling day would put yesterday afternoon
+ * under both labels, and "Yesterday" would stop meaning the day that ended —
+ * which is the question being asked when someone picks it. "Past week" and
+ * "Past month" say "past", so those stay rolling and open-ended at the top.
+ */
+function ageWindow(age: SearchAge): { from: number; to: number } {
+	if (age === "any") return { from: 0, to: Infinity };
+	if (age === "week" || age === "month") {
+		return { from: Date.now() - AGE_DAYS[age] * DAY_MS, to: Infinity };
+	}
+
+	const midnight = new Date();
+	midnight.setHours(0, 0, 0, 0);
+	const startOfToday = midnight.getTime();
+	if (age === "today") return { from: startOfToday, to: Infinity };
+
+	// Stepping the date rather than subtracting a day, so the clocks changing
+	// overnight does not shift the boundary by an hour.
+	midnight.setDate(midnight.getDate() - 1);
+	return { from: midnight.getTime(), to: startOfToday };
 }

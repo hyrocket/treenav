@@ -1689,6 +1689,22 @@ assert.ok(!found("", { tag: "todo" }).includes("attachment.txt"), "an untagged f
 // Nothing in the fixture is older than this run, so the age filter keeps it all.
 assert.ok(found("", { age: "week" }).length > 0, "recently written files are recent");
 
+// Today and Yesterday are calendar days, so they never both hold the same file.
+const dated = plugin.search.search("welcome", { kind: "any", extension: null, age: "any", tag: null }, 1)
+	.files[0];
+const writtenAt = dated.stat.mtime;
+assert.ok(found("welcome", { age: "today" }).includes("Welcome.md"), "a file written now is today's");
+assert.ok(!found("welcome", { age: "yesterday" }).includes("Welcome.md"), "and not yesterday's");
+
+const yesterdayNoon = new Date();
+yesterdayNoon.setHours(12, 0, 0, 0);
+yesterdayNoon.setDate(yesterdayNoon.getDate() - 1);
+dated.stat.mtime = yesterdayNoon.getTime();
+assert.ok(found("welcome", { age: "yesterday" }).includes("Welcome.md"), "yesterday's file is yesterday's");
+assert.ok(!found("welcome", { age: "today" }).includes("Welcome.md"), "and has dropped out of today");
+assert.ok(found("welcome", { age: "week" }).includes("Welcome.md"), "the past week still reaches back to it");
+dated.stat.mtime = writtenAt;
+
 assert.ok(plugin.search.extensions().includes("md"), "the extensions on offer come from the vault");
 assert.ok(plugin.search.tags().includes("project/alpha"), "the tags on offer come from the cache");
 

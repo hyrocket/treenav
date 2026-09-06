@@ -20,6 +20,7 @@ const KINDS: Record<SearchKind, string> = {
 const AGES: Record<SearchAge, string> = {
 	any: "Any time",
 	today: "Today",
+	yesterday: "Yesterday",
 	week: "Past week",
 	month: "Past month",
 };
