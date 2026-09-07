@@ -496,6 +496,12 @@ button.treenav-is-on {
  * placed at the parent's collapse box, which is one indentation step to the
  * left of the row's own.
  *
+ * The segments are backgrounds rather than absolutely positioned pseudo-
+ * elements. A pseudo-element stretched from the top of its item to the bottom
+ * has to be laid out against the height of the whole subtree beside it, once
+ * per row, and expanding a deep folder came out about half as slow again as
+ * the same folder in the modern style. A background is paint, not layout.
+ *
  * The lines are hairlines rather than the traditional dots. A dotted border
  * lets the browser space the dots to fit the line it is on, so a long vertical
  * and a short stub came out at different densities, and on a display that is
@@ -512,49 +518,37 @@ button.treenav-is-on {
 	display: none;
 }
 
-.treenav-style-classic .treenav-item {
-	position: relative;
-}
-
-.treenav-style-classic .treenav-item::before,
-.treenav-style-classic .treenav-item-self::before {
-	content: "";
-	position: absolute;
-	pointer-events: none;
-	background-color: var(--treenav-line);
-}
-
 /* Vertical: runs the full height of the item, children included. */
-.treenav-style-classic .treenav-item::before {
-	top: 0;
-	bottom: 0;
-	left: calc(var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px);
-	width: 1px;
+.treenav-style-classic .treenav-item {
+	background-image: linear-gradient(var(--treenav-line), var(--treenav-line));
+	background-repeat: no-repeat;
+	background-size: 1px 100%;
+	background-position: calc(var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px) 0;
 }
 
 /* The last child ends the line at its own row rather than carrying it on. */
-.treenav-style-classic .treenav-item:last-child::before {
-	bottom: auto;
-	height: calc(var(--treenav-row-height) / 2);
+.treenav-style-classic .treenav-item:last-child {
+	background-size: 1px calc(var(--treenav-row-height) / 2);
 }
 
 /* Horizontal: from that vertical across to this row's own box. */
-.treenav-style-classic .treenav-item-self::before {
-	top: calc(var(--treenav-row-height) / 2);
-	left: calc(var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px);
-	width: var(--treenav-indent);
-	height: 1px;
+.treenav-style-classic .treenav-item-self {
+	background-image: linear-gradient(var(--treenav-line), var(--treenav-line));
+	background-repeat: no-repeat;
+	background-size: var(--treenav-indent) 1px;
+	background-position: calc(var(--size-4-1) + (var(--treenav-depth, 0) - 1) * var(--treenav-indent) + 8px)
+		calc(var(--treenav-row-height) / 2);
 }
 
 /* A row with no box has nothing to stop at, so the stub reaches its icon. */
-.treenav-style-classic .treenav-item.treenav-is-leaf > .treenav-item-self::before {
-	width: calc(var(--treenav-indent) + 10px);
+.treenav-style-classic .treenav-item.treenav-is-leaf > .treenav-item-self {
+	background-size: calc(var(--treenav-indent) + 10px) 1px;
 }
 
 /* Top-level rows have no parent to connect to. */
-.treenav-style-classic > .treenav-item::before,
-.treenav-style-classic > .treenav-item > .treenav-item-self::before {
-	display: none;
+.treenav-style-classic > .treenav-item,
+.treenav-style-classic > .treenav-item > .treenav-item-self {
+	background-image: none;
 }
 
 /* Tighter rows, the way a classic tree packs them. */
