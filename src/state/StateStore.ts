@@ -201,14 +201,16 @@ export class StateStore {
 	 * Nesting turns `A.md` into the folder `A`, and the folder's row takes over
 	 * the place the note's row held. Without this the folder would be an item
 	 * the store has never seen: unstyled, and unpositioned so it falls to the
-	 * bottom of a manually ordered folder. The note keeps its own entries, so
+	 * bottom of a manually ordered folder. The note keeps its style, so
 	 * flattening restores it exactly.
+	 *
+	 * `index` is for a caller whose source has already changed folder, which
+	 * leaves its position behind: it reads the position first and passes it in.
 	 */
-	inherit(fromPath: string, toPath: string): void {
+	inherit(fromPath: string, toPath: string, index = this.order.get(fromPath)): void {
 		const style = this.styles.get(fromPath);
 		if (style) this.styles.set(toPath, { ...style });
 
-		const index = this.order.get(fromPath);
 		if (index !== undefined) this.order.set(toPath, index);
 
 		if (style || index !== undefined) this.scheduleSave();
@@ -236,11 +238,16 @@ export class StateStore {
 			changed = true;
 		}
 
+		// A position only means something among the siblings it was set against.
+		// An item that changes folder leaves its own behind — carried over, it
+		// would land wherever that number happens to fall among strangers — while
+		// what it contains keeps its order, since those siblings moved with it.
+		const moved = parentPath(oldPath) !== parentPath(newPath);
 		for (const [path, index] of [...this.order]) {
 			const next = remapPath(path, oldPath, newPath);
 			if (next === null) continue;
 			this.order.delete(path);
-			this.order.set(next, index);
+			if (!(moved && path === oldPath)) this.order.set(next, index);
 			changed = true;
 		}
 

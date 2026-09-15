@@ -16,6 +16,43 @@ export interface OpResult<T> {
 const INVALID_NAME = /[\/:*?"<>|]/;
 
 /**
+ * How long to wait for a move Obsidian has queued rather than performed. Long:
+ * a queued move waits for the metadata cache to settle, which took seconds in
+ * a real vault while another plugin was indexing, and waiting blocks nothing.
+ */
+const ARRIVAL_TIMEOUT_MS = 60_000;
+
+/**
+ * `fileManager.renameFile`, resolving only once the file is really at `path`.
+ *
+ * Obsidian runs one link update at a time. Asked for a move while another one
+ * is still updating links, it queues the new move behind it and returns at
+ * once, with the file still where it was. Whatever runs next would read the
+ * old location: a drop saving its order would save it under the path the file
+ * is about to leave, and a flatten would trash the folder with the note still
+ * inside.
+ *
+ * Callers that depend on the move check `file.path` afterwards: a queued move
+ * that never lands gives up after a while rather than hanging.
+ */
+export async function renameAndWait(app: App, file: TAbstractFile, path: string): Promise<void> {
+	await app.fileManager.renameFile(file, path);
+	if (file.path === path) return;
+
+	await new Promise<void>((resolve) => {
+		const done = () => {
+			app.vault.offref(ref);
+			window.clearTimeout(timer);
+			resolve();
+		};
+		const ref = app.vault.on("rename", (renamed) => {
+			if (renamed === file && file.path === path) done();
+		});
+		const timer = window.setTimeout(done, ARRIVAL_TIMEOUT_MS);
+	});
+}
+
+/**
  * Every mutation of the vault goes through here, and always through the
  * official Vault / FileManager API: `fileManager.renameFile` so links and
  * metadata follow the move, `fileManager.trashFile` so the user's trash
@@ -101,7 +138,7 @@ export class FileOpsService {
 		}
 
 		try {
-			await this.app.fileManager.renameFile(file, normalizePath(joinPath(parent.path, trimmed)));
+			await renameAndWait(this.app, file, normalizePath(joinPath(parent.path, trimmed)));
 			return { ok: true };
 		} catch (error) {
 			// The original file is untouched when renameFile throws.
@@ -129,8 +166,11 @@ export class FileOpsService {
 		if (problem) return this.fail(problem);
 
 		try {
-			await this.app.fileManager.renameFile(file, normalizePath(joinPath(target.path, file.name)));
-			return { ok: true };
+			const path = normalizePath(joinPath(target.path, file.name));
+			await renameAndWait(this.app, file, path);
+			// Still queued behind another move: not there yet, so nothing may be
+			// done on the assumption that it is.
+			return { ok: file.path === path };
 		} catch (error) {
 			return this.fail(`Could not move: ${describe(error)}`);
 		}
@@ -164,9 +204,9 @@ export class FileOpsService {
 			if (!folder) {
 				folder = await this.app.vault.createFolder(folderPath);
 				// The note becomes the folder note of the folder just created.
-				await this.app.fileManager.renameFile(note, normalizePath(joinPath(folderPath, note.name)));
+				await renameAndWait(this.app, note, normalizePath(joinPath(folderPath, note.name)));
 			} else if (note.parent !== folder && !this.findConflict(folder, note.name)) {
-				await this.app.fileManager.renameFile(note, normalizePath(joinPath(folderPath, note.name)));
+				await renameAndWait(this.app, note, normalizePath(joinPath(folderPath, note.name)));
 			}
 		} catch (error) {
 			return this.fail(`Could not nest under "${note.basename}": ${describe(error)}`);

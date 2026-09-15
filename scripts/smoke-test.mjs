@@ -683,11 +683,23 @@ const listeners = new Map();
 function on(name, cb) {
 	if (!listeners.has(name)) listeners.set(name, []);
 	listeners.get(name).push(cb);
-	return {};
+	return { cb };
 }
 function emit(name, ...args) {
-	for (const cb of listeners.get(name) ?? []) cb(...args);
+	for (const cb of [...(listeners.get(name) ?? [])]) cb(...args);
 }
+function offref(ref) {
+	for (const cbs of listeners.values()) {
+		const index = cbs.indexOf(ref.cb);
+		if (index !== -1) cbs.splice(index, 1);
+	}
+}
+
+/**
+ * While set, a move reports back before it happens, the way Obsidian answers
+ * one asked for while another move is still updating links: queued, not done.
+ */
+let deferRenames = false;
 
 /** Leaves the run has opened, in the shape `getLeavesOfType` reports. */
 const openLeaves = [];
@@ -711,6 +723,7 @@ const app = {
 		getAbstractFileByPath: (p) => byPath.get(p) ?? null,
 		getFiles: () => [...byPath.values()].filter((f) => f instanceof TFile),
 		on,
+		offref,
 		create: async (path) => {
 			const slash = path.lastIndexOf("/");
 			const parent = slash === -1 ? root : folderAt(path.slice(0, slash));
@@ -737,12 +750,16 @@ const app = {
 	},
 	fileManager: {
 		renameFile: async (file, newPath) => {
-			const oldPath = file.path;
-			const slash = newPath.lastIndexOf("/");
-			const parent = slash === -1 ? root : folderAt(newPath.slice(0, slash));
-			reparent(file, parent);
-			setPath(file, newPath);
-			emit("rename", file, oldPath);
+			const perform = () => {
+				const oldPath = file.path;
+				const slash = newPath.lastIndexOf("/");
+				const parent = slash === -1 ? root : folderAt(newPath.slice(0, slash));
+				reparent(file, parent);
+				setPath(file, newPath);
+				emit("rename", file, oldPath);
+			};
+			if (deferRenames) setTimeout(perform, 10);
+			else perform();
 		},
 		trashFile: async (file) => {
 			if (file.parent) {
@@ -999,10 +1016,8 @@ if (!vaultArg) {
 	plugin.state.setOrder(["Projects/Sixtoms/Planning.md", "Projects/Sixtoms/Marketing.md"]);
 	plugin.styles.update("Projects/Sixtoms/Planning.md", { icon: "lucide-star" });
 
-	const nested = await plugin.fileOps.nestUnder(dragged, target);
-	plugin.state.inherit(target.path, "Projects/Sixtoms/Planning");
+	await plugin.outline.nestUnder(dragged, target);
 
-	assert.ok(nested.ok, "nestUnder failed: " + nested.error);
 	assert.ok(
 		byPath.get("Projects/Sixtoms/Planning") instanceof TFolder,
 		"nesting should create a folder named after the target note",
@@ -1435,6 +1450,156 @@ assert.equal(
 );
 
 console.log("multi-select drag: ok");
+
+// --- Where a drop onto a folder row lands -----------------------------------
+//
+// A position is only meaningful among the siblings it was set against. Items
+// used to carry theirs into the new folder and land wherever that number fell
+// among strangers: dropped from positions 1 and 3, they came out interleaved
+// with what was there. They go to the bottom now, in the order they were in.
+
+for (const path of [
+	"Drop/Src/p.md",
+	"Drop/Src/Folder B/b.md",
+	"Drop/Src/q.md",
+	"Drop/Src/Folder A/a.md",
+	"Drop/Dst/Alpha.md",
+	"Drop/Dst/Beta.md",
+	"Drop/Dst/Gamma.md",
+	"Drop/Dst/Delta.md",
+	"Drop/Sorted/Alpha.md",
+	"Drop/Sorted/Delta.md",
+]) {
+	await app.vault.create(path);
+}
+const pathsIn = (path) =>
+	plugin.treeService.getVisibleChildren(byPath.get(path)).map((f) => f.path.slice(path.length + 1));
+
+plugin.state.setOrder(["Drop/Src/p.md", "Drop/Src/Folder B", "Drop/Src/q.md", "Drop/Src/Folder A"]);
+plugin.state.setOrder(["Drop/Dst/Alpha.md", "Drop/Dst/Beta.md", "Drop/Dst/Gamma.md", "Drop/Dst/Delta.md"]);
+
+view.rebuild();
+placed.length = 0;
+view.renderer.getItem("Drop").setExpanded(true);
+view.renderer.getItem("Drop/Src").setExpanded(true);
+placeRow("Drop/Src/Folder B", { top: 0 });
+placeRow("Drop/Src/Folder A", { top: 20 });
+placeRow("Drop/Dst", { top: 40 });
+placeRow("Drop/Sorted", { top: 60 });
+
+// Picked up in screen order — B above A — and dropped on the collapsed folder.
+click("Drop/Src/Folder B");
+click("Drop/Src/Folder A", { ctrlKey: true });
+drag("Drop/Src/Folder B", { x: 150, y: 50 });
+await new Promise((resolve) => setTimeout(resolve, 5));
+
+assert.deepEqual(
+	pathsIn("Drop/Dst"),
+	["Alpha.md", "Beta.md", "Gamma.md", "Delta.md", "Folder B", "Folder A"],
+	"a drop into an ordered folder should land at the bottom, in the order it was picked up",
+);
+assert.ok(byPath.get("Drop/Dst/Folder A/a.md"), "a moved folder should keep its contents");
+
+// A sorted folder takes them by name and stays sorted: the drop must not
+// freeze it into a manual order.
+view.rebuild();
+placed.length = 0;
+view.renderer.getItem("Drop").setExpanded(true);
+view.renderer.getItem("Drop/Src").setExpanded(true);
+placeRow("Drop/Src/p.md", { top: 0 });
+placeRow("Drop/Src/q.md", { top: 20 });
+placeRow("Drop/Sorted", { top: 60 });
+
+click("Drop/Src/p.md");
+click("Drop/Src/q.md", { ctrlKey: true });
+drag("Drop/Src/p.md", { x: 150, y: 70 });
+await new Promise((resolve) => setTimeout(resolve, 5));
+
+assert.deepEqual(
+	pathsIn("Drop/Sorted"),
+	["Alpha.md", "Delta.md", "p.md", "q.md"],
+	"a drop into a sorted folder should file the items by name",
+);
+assert.equal(plugin.state.hasOrder("Drop/Sorted"), false, "a sorted folder should stay sorted");
+
+// Renaming in place is not a move: the item keeps its position.
+await plugin.fileOps.rename(byPath.get("Drop/Dst/Alpha.md"), "Omega.md");
+assert.equal(pathsIn("Drop/Dst")[0], "Omega.md", "a rename should keep the item where it was");
+
+console.log("drop into folder order: ok");
+
+// --- Dropping a set between two rows ------------------------------------------
+//
+// The line between rows places the whole set there, not just the first of it.
+
+for (const path of ["Drop/Src2/Folder C/c.md", "Drop/Src2/Folder D/d.md", "Drop/Src2/r.md"]) {
+	await app.vault.create(path);
+}
+plugin.state.setOrder(["Drop/Src2/r.md", "Drop/Src2/Folder C", "Drop/Src2/Folder D"]);
+
+view.rebuild();
+placed.length = 0;
+view.renderer.getItem("Drop").setExpanded(true);
+view.renderer.getItem("Drop/Src2").setExpanded(true);
+view.renderer.getItem("Drop/Dst").setExpanded(true);
+placeRow("Drop/Src2/Folder C", { top: 0 });
+placeRow("Drop/Src2/Folder D", { top: 20 });
+placeRow("Drop/Dst/Beta.md", { top: 40 });
+placeRow("Drop/Dst/Gamma.md", { top: 60 });
+
+click("Drop/Src2/Folder C");
+click("Drop/Src2/Folder D", { ctrlKey: true });
+// The lower half of Beta, clear of its icon: directly after it.
+drag("Drop/Src2/Folder C", { x: 150, y: 55 });
+await new Promise((resolve) => setTimeout(resolve, 5));
+
+assert.deepEqual(
+	pathsIn("Drop/Dst"),
+	["Omega.md", "Beta.md", "Folder C", "Folder D", "Gamma.md", "Delta.md", "Folder B", "Folder A"],
+	"a set dropped after a row should all land there, in order",
+);
+console.log("drop between rows: ok");
+
+// --- ...when Obsidian queues the moves ----------------------------------------
+//
+// Asked for a move while another is still updating links, Obsidian reports
+// back before doing it. The order used to be saved against the path the item
+// was leaving, and only the first of a set landed where it was dropped.
+
+for (const path of ["Drop/Src3/Folder E/e.md", "Drop/Src3/Folder F/f.md", "Drop/Src3/Folder G/g.md", "Drop/Src3/Folder H/h.md"]) {
+	await app.vault.create(path);
+}
+
+const dropQueued = async (sources, onto, y) => {
+	view.rebuild();
+	placed.length = 0;
+	view.renderer.getItem("Drop").setExpanded(true);
+	view.renderer.getItem("Drop/Src3").setExpanded(true);
+	view.renderer.getItem("Drop/Dst").setExpanded(true);
+	sources.forEach((path, i) => placeRow(path, { top: i * 20 }));
+	placeRow(onto, { top: 100 });
+
+	sources.forEach((path, i) => click(path, i ? { ctrlKey: true } : {}));
+	deferRenames = true;
+	drag(sources[0], { x: 150, y });
+	await new Promise((resolve) => setTimeout(resolve, 300));
+	deferRenames = false;
+};
+
+await dropQueued(["Drop/Src3/Folder E", "Drop/Src3/Folder F"], "Drop/Dst/Gamma.md", 115);
+assert.deepEqual(
+	pathsIn("Drop/Dst"),
+	["Omega.md", "Beta.md", "Folder C", "Folder D", "Gamma.md", "Folder E", "Folder F", "Delta.md", "Folder B", "Folder A"],
+	"queued moves dropped after a row should all land there, in order",
+);
+
+await dropQueued(["Drop/Src3/Folder G", "Drop/Src3/Folder H"], "Drop/Dst", 110);
+assert.deepEqual(
+	pathsIn("Drop/Dst").slice(-2),
+	["Folder G", "Folder H"],
+	"queued moves dropped into a folder should land at the bottom, in order",
+);
+console.log("queued moves: ok");
 
 // --- Touch gestures ----------------------------------------------------------
 //

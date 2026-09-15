@@ -625,15 +625,8 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 				files.every(
 					(file) => this.plugin.fileOps.checkMove(file, folder) !== null || folder === file.parent,
 				),
-			(folder) => void this.moveAll(files, folder),
+			(folder) => void this.plugin.outline.moveAllInto(files, folder),
 		).open();
-	}
-
-	/** One at a time: two moves at once can race for the same name. */
-	private async moveAll(files: TAbstractFile[], folder: TFolder): Promise<void> {
-		for (const file of files) {
-			if (file.parent !== folder) await this.plugin.fileOps.move(file, folder);
-		}
 	}
 
 	// --- Appearance --------------------------------------------------------

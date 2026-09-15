@@ -204,7 +204,7 @@ export class DragDropService {
 			if (!target && this.isOverContainer(event.clientX, event.clientY)) {
 				const root = this.app.vault.getRoot();
 				if (sources.some((source) => this.canMoveInto(source, root))) {
-					void this.moveAll(sources, root);
+					void this.outline.moveAllInto(sources, root);
 					return;
 				}
 			}
@@ -445,7 +445,7 @@ export class DragDropService {
 	): Promise<void> {
 		switch (mode) {
 			case "into":
-				await this.moveAll(sources, target as TFolder);
+				await this.outline.moveAllInto(sources, target as TFolder);
 				return;
 			case "nest":
 				// The first one turns the note into a folder; the rest join it.
@@ -457,13 +457,6 @@ export class DragDropService {
 				return;
 			default:
 				await this.outline.placeAllNextTo(sources, target, mode);
-		}
-	}
-
-	/** One at a time: two moves at once can race for the same name. */
-	private async moveAll(sources: TAbstractFile[], target: TFolder): Promise<void> {
-		for (const source of sources) {
-			if (this.canMoveInto(source, target)) await this.fileOps.move(source, target);
 		}
 	}
 

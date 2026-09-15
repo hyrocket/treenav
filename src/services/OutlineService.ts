@@ -66,6 +66,31 @@ export class OutlineService {
 		}
 	}
 
+	/**
+	 * Drops several items into `folder`, as a drop onto a folder row does.
+	 *
+	 * A folder the user has put in order takes them at the bottom, in the order
+	 * they were given — the same place a new note lands. A sorted folder files
+	 * them by name like anything else, and stays sorted. Whatever cannot go in
+	 * stays where it is.
+	 *
+	 * One at a time: two moves at once can race for the same name.
+	 */
+	async moveAllInto(sources: TAbstractFile[], folder: TFolder): Promise<void> {
+		const arrived: TAbstractFile[] = [];
+		for (const source of sources) {
+			if (source.parent === folder || this.fileOps.checkMove(source, folder) !== null) continue;
+			const moved = await this.fileOps.move(source, folder);
+			if (moved.ok) arrived.push(source);
+		}
+		if (arrived.length === 0 || !this.state.hasOrder(folder.path)) return;
+
+		const listing = this.tree.getVisibleChildren(folder);
+		const stayed = listing.filter((file) => !arrived.includes(file));
+		const landed = arrived.filter((file) => listing.includes(file));
+		this.commit(folder, [...stayed, ...landed]);
+	}
+
 	/** Moves one place up (`-1`) or down (`+1`) among its visible siblings. */
 	moveStep(file: TAbstractFile, delta: -1 | 1): void {
 		const parent = file.parent;
@@ -133,6 +158,8 @@ export class OutlineService {
 
 	/** Turns `note` into a folder note holding `source`. */
 	async nestUnder(source: TAbstractFile, note: TFile): Promise<void> {
+		// Read before the note moves into its folder, which leaves this behind.
+		const position = this.state.getOrder(note.path);
 		const result = await this.fileOps.nestUnder(source, note);
 		if (!result.ok || !result.value) return;
 
@@ -142,7 +169,7 @@ export class OutlineService {
 			this.state.markNested(folder.path);
 			// The folder's row now stands exactly where the note's row was, so it
 			// takes over the note's position and appearance.
-			this.state.inherit(note.path, folder.path);
+			this.state.inherit(note.path, folder.path, position);
 		}
 		this.state.setExpanded(folder.path, true);
 		this.onChanged?.(folder.path);

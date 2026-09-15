@@ -3,6 +3,7 @@ import { FlattenDecision } from "../components/FlattenPromptModal";
 import { StateStore } from "../state/StateStore";
 import { FlattenMode } from "../types";
 import { joinPath, parentPath } from "../state/paths";
+import { renameAndWait } from "./FileOpsService";
 
 /**
  * Folder notes use the "note of the same name inside the folder" convention:
@@ -197,7 +198,11 @@ export class FolderNoteService {
 		trackedPath: string,
 	): Promise<void> {
 		try {
-			await this.app.fileManager.renameFile(note, targetPath);
+			await renameAndWait(this.app, note, targetPath);
+			// Trashing takes whatever is still inside. If the note has not made it
+			// out — Obsidian can queue a move and report back before doing it —
+			// or something else has landed in there, the folder stays.
+			if (note.path !== targetPath || folder.children.length > 0) return;
 			// The note's row takes the folder row's place, so it takes over what
 			// the user set on the folder. Must happen before the folder is
 			// trashed, which discards the folder's own entries.
