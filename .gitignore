@@ -17,3 +17,6 @@ bench-vault/
 demo-vault/
 
 .DS_Store
+
+# Ready-to-copy plugin folder for manual mobile install
+dist/
