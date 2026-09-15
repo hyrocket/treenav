@@ -1,4 +1,4 @@
-import { App, Notice, TAbstractFile, TFile, TFolder, normalizePath } from "obsidian";
+import { App, Notice, Platform, TAbstractFile, TFile, TFolder, normalizePath } from "obsidian";
 import { isSameOrDescendant, joinPath } from "../state/paths";
 
 /** A nest either reused an existing folder or created one that can be undone. */
@@ -111,6 +111,44 @@ export class FileOpsService {
 		} catch (error) {
 			return this.fail(`Could not copy "${file.name}": ${describe(error)}`);
 		}
+	}
+
+	/**
+	 * Copies files dropped in from outside the app into `folder`, the way the
+	 * core file explorer does: each under its own name, numbered when taken.
+	 * A file that already lives in the vault is not copied again.
+	 */
+	async importFiles(files: File[], folder: TFolder): Promise<TFile[]> {
+		const created: TFile[] = [];
+		for (const file of files) {
+			if (this.vaultFileFor(file)) continue;
+
+			const dot = file.name.lastIndexOf(".");
+			const base = dot > 0 ? file.name.slice(0, dot) : file.name;
+			const extension = dot > 0 ? file.name.slice(dot) : "";
+			const name = this.uniqueName(folder, base, extension);
+			try {
+				const data = await file.arrayBuffer();
+				created.push(await this.app.vault.createBinary(normalizePath(joinPath(folder.path, name)), data));
+			} catch (error) {
+				this.fail(`Could not import "${file.name}": ${describe(error)}`);
+			}
+		}
+		return created;
+	}
+
+	/** The vault's own copy of a dropped file, when that is where it came from. */
+	private vaultFileFor(file: File): TAbstractFile | null {
+		// Only a desktop vault has a folder on disk to compare with.
+		const adapter = this.app.vault.adapter as { getBasePath?: () => string } | undefined;
+		const osPath = osPathOf(file);
+		if (!osPath || !adapter?.getBasePath) return null;
+
+		const base = adapter.getBasePath().replace(/\\/g, "/").replace(/\/$/, "");
+		const path = osPath.replace(/\\/g, "/");
+		// Windows and macOS disks do not care about case; the prefix test must not either.
+		if (!path.toLowerCase().startsWith(base.toLowerCase() + "/")) return null;
+		return this.app.vault.getAbstractFileByPath(normalizePath(path.slice(base.length + 1)));
 	}
 
 	async createFolder(parent: TFolder, baseName = "New folder"): Promise<OpResult<TFolder>> {
@@ -233,4 +271,22 @@ export class FileOpsService {
 
 function describe(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Where a dropped file lives on disk, or `null` where the platform will not
+ * say. Electron stopped putting it on `File.path` and asks for `webUtils`
+ * instead; the old property still serves older builds. Mobile has neither.
+ */
+function osPathOf(file: File): string | null {
+	if (!Platform.isDesktopApp) return null;
+	try {
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		const { webUtils } = require("electron") as { webUtils?: { getPathForFile(file: File): string } };
+		const path = webUtils?.getPathForFile(file);
+		if (path) return path;
+	} catch {
+		// No electron to ask: fall through to the property.
+	}
+	return (file as File & { path?: string }).path || null;
 }

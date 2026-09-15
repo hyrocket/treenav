@@ -35,7 +35,7 @@ export default class TreeNavPlugin extends Plugin {
 		this.outline = new OutlineService(this.fileOps, this.treeService, this.state);
 		// A pure reorder changes no file, so no vault event announces it.
 		this.outline.onChanged = (folderPath) => this.refreshFolder(folderPath);
-		this.dnd = new DragDropService(this.app, this.fileOps, this.outline);
+		this.dnd = new DragDropService(this.app, this.fileOps, this.outline, this.treeService);
 		this.search = new SearchService(this.app);
 		this.styles = new StyleService(this.state);
 

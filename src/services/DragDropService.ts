@@ -1,7 +1,8 @@
-import { App, TAbstractFile, TFile, TFolder } from "obsidian";
+import { App, Notice, TAbstractFile, TFile, TFolder } from "obsidian";
 import { isSameOrDescendant } from "../state/paths";
 import { FileOpsService } from "./FileOpsService";
 import { OutlineService } from "./OutlineService";
+import { TreeService } from "./TreeService";
 
 /** How long a finger has to rest on a row before it picks it up. */
 const LONG_PRESS_MS = 400;
@@ -102,6 +103,7 @@ export class DragDropService {
 		private readonly app: App,
 		private readonly fileOps: FileOpsService,
 		private readonly outline: OutlineService,
+		private readonly tree: TreeService,
 	) {}
 
 	/** Wires a tree row up as both a drag source and a drop target. */
@@ -113,6 +115,7 @@ export class DragDropService {
 	/** The vault root accepts drops on the empty space below the tree. */
 	attachRootTarget(el: HTMLElement): void {
 		this.container = el;
+		this.attachExternalDrop(el);
 	}
 
 	// --- The press ---------------------------------------------------------
@@ -460,6 +463,114 @@ export class DragDropService {
 		}
 	}
 
+	// --- Files from outside ------------------------------------------------
+
+	/**
+	 * Files dragged in from the system are copied into the folder they are
+	 * dropped on, as the core file explorer does. A note row stands for the
+	 * folder it is in, and empty space for the vault root.
+	 *
+	 * These arrive as HTML5 drag events, the one kind of drag the pointer
+	 * layer above never sees — nothing inside the tree starts one.
+	 */
+	private attachExternalDrop(container: HTMLElement): void {
+		const over = (event: DragEvent) => {
+			if (!carriesFiles(event.dataTransfer)) return;
+			event.preventDefault();
+			event.dataTransfer.dropEffect = "copy";
+
+			this.win = container.ownerDocument.defaultView ?? window;
+			const { folderRow, hoverRow } = this.externalTarget(event);
+			if (folderRow) this.setIndicator(folderRow, "into");
+			else this.clearIndicator();
+			container.toggleClass("treenav-is-drop-target", !folderRow);
+			this.updateDwell(hoverRow, hoverRow ? "into" : null);
+		};
+
+		container.addEventListener("dragenter", over);
+		container.addEventListener("dragover", over);
+		container.addEventListener("dragleave", (event) => {
+			// Crossing from one row to the next leaves one and enters another;
+			// only leaving the tree altogether ends the hover.
+			if (event.relatedTarget instanceof Node && container.contains(event.relatedTarget)) return;
+			this.endExternalHover(container);
+		});
+		container.addEventListener("drop", (event) => {
+			if (!carriesFiles(event.dataTransfer)) return;
+			event.preventDefault();
+
+			const { folder, folderRow } = this.externalTarget(event);
+			// The items are only readable while the event lasts; the files they
+			// hand out stay readable after.
+			const files: File[] = [];
+			let folders = 0;
+			for (const item of Array.from(event.dataTransfer.items)) {
+				if (item.kind !== "file") continue;
+				if (item.webkitGetAsEntry?.()?.isDirectory) {
+					folders += 1;
+					continue;
+				}
+				const file = item.getAsFile();
+				if (file) files.push(file);
+			}
+			this.endExternalHover(container);
+			void this.importInto(files, folders, folder, folderRow);
+		});
+	}
+
+	/**
+	 * The folder a drop from outside would land in, the row that stands for it
+	 * (none for the root), and the folder row directly under the pointer —
+	 * the one hovering may open.
+	 */
+	private externalTarget(
+		event: DragEvent,
+	): { folder: TFolder; folderRow: DropTargetRow | null; hoverRow: DropTargetRow | null } {
+		const root = this.app.vault.getRoot();
+		const rowEl = event.target instanceof Element ? event.target.closest(".treenav-item-self") : null;
+		const row = rowEl instanceof HTMLElement ? this.rows.get(rowEl) ?? null : null;
+		if (!row) return { folder: root, folderRow: null, hoverRow: null };
+		if (row.isFolder) return { folder: row.file as TFolder, folderRow: row, hoverRow: row };
+
+		const folder = row.file.parent ?? root;
+		if (folder === root) return { folder, folderRow: null, hoverRow: null };
+		// A note's row sits inside its folder's item, whose own row comes first.
+		const folderEl = row.rowEl.parentElement?.parentElement?.closest(".treenav-folder");
+		const parentEl = folderEl?.querySelector(":scope > .treenav-item-self");
+		const parentRow = parentEl instanceof HTMLElement ? this.rows.get(parentEl) : undefined;
+		return { folder, folderRow: parentRow?.file === folder ? parentRow : null, hoverRow: null };
+	}
+
+	private endExternalHover(container: HTMLElement): void {
+		this.clearIndicator();
+		container.removeClass("treenav-is-drop-target");
+		this.updateDwell(null, null);
+	}
+
+	private async importInto(
+		files: File[],
+		folders: number,
+		folder: TFolder,
+		folderRow: DropTargetRow | null,
+	): Promise<void> {
+		const created = await this.fileOps.importFiles(files, folder);
+		// Open the folder, so what was dropped on a closed one can be seen.
+		if (created.length > 0) folderRow?.setExpanded(true);
+
+		const listed = this.tree.getVisibleChildren(folder);
+		const hidden = created.filter((file) => !listed.includes(file)).length;
+		const notes: string[] = [];
+		if (hidden > 0) {
+			notes.push(
+				`${hidden} imported ${hidden === 1 ? "file is" : "files are"} hidden — turn on "Show non-markdown files" to list ${hidden === 1 ? "it" : "them"}.`,
+			);
+		}
+		if (folders > 0) {
+			notes.push(`${folders === 1 ? "A folder" : `${folders} folders`} cannot be imported — drop the files inside instead.`);
+		}
+		if (notes.length > 0) new Notice(`TreeNav: ${notes.join(" ")}`);
+	}
+
 	// --- Indicator ---------------------------------------------------------
 
 	/** Only one row is ever marked, so no stale marker is left behind. */
@@ -473,6 +584,11 @@ export class DragDropService {
 		this.indicated?.showDropIndicator(null);
 		this.indicated = null;
 	}
+}
+
+/** A drag from outside the app carrying files, rather than text or a link. */
+function carriesFiles(data: DataTransfer | null): data is DataTransfer {
+	return !!data && Array.from(data.types).includes("Files");
 }
 
 /**

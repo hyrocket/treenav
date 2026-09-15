@@ -738,6 +738,10 @@ const app = {
 			emit("create", folder);
 			return folder;
 		},
+		createBinary: async (path, data) => {
+			assert.ok(data instanceof ArrayBuffer, "an import should write the file's bytes");
+			return app.vault.create(path);
+		},
 		copy: async (file, newPath) => {
 			const slash = newPath.lastIndexOf("/");
 			const parent = slash === -1 ? root : folderAt(newPath.slice(0, slash));
@@ -1600,6 +1604,76 @@ assert.deepEqual(
 	"queued moves dropped into a folder should land at the bottom, in order",
 );
 console.log("queued moves: ok");
+
+// --- Files dragged in from outside ------------------------------------------
+//
+// The system hands these over as HTML5 drag events, which the pointer layer
+// never sees. They are copied into the folder under the pointer, as the core
+// file explorer does. jsdom has no DragEvent, so the transfer is attached.
+
+const outsideFile = (name) => ({ name, arrayBuffer: async () => new ArrayBuffer(4) });
+const dragFromOutside = (type, el, entries) => {
+	const event = new window.Event(type, { bubbles: true, cancelable: true });
+	event.dataTransfer = {
+		types: ["Files"],
+		dropEffect: "none",
+		items: entries.map((entry) =>
+			entry === "folder"
+				? { kind: "file", webkitGetAsEntry: () => ({ isDirectory: true }), getAsFile: () => null }
+				: { kind: "file", webkitGetAsEntry: () => ({ isDirectory: false }), getAsFile: () => entry },
+		),
+	};
+	el.dispatchEvent(event);
+	return event;
+};
+
+await app.vault.create("Drop/Inbox/Existing.md");
+view.rebuild();
+view.renderer.getItem("Drop").setExpanded(true);
+view.renderer.getItem("Drop/Inbox").setExpanded(false);
+
+const inboxRow = rowFor("Drop/Inbox");
+const hover = dragFromOutside("dragover", inboxRow, [outsideFile("Letter.md")]);
+assert.ok(hover.defaultPrevented, "a folder should accept files from outside");
+assert.equal(hover.dataTransfer.dropEffect, "copy", "and say it will copy them");
+assert.ok(inboxRow.classList.contains("treenav-drop-into"), "the folder should show it is the target");
+
+notices.length = 0;
+dragFromOutside("drop", inboxRow, [
+	outsideFile("Letter.md"),
+	outsideFile("Existing.md"),
+	outsideFile("photo.png"),
+	"folder",
+]);
+await new Promise((resolve) => setTimeout(resolve, 20));
+
+assert.deepEqual(
+	pathsIn("Drop/Inbox"),
+	["Existing 1.md", "Existing.md", "Letter.md"],
+	"dropped notes should be copied in, a taken name numbered",
+);
+assert.ok(byPath.get("Drop/Inbox/photo.png"), "a dropped attachment should be copied in too");
+assert.ok(!inboxRow.classList.contains("treenav-drop-into"), "the target mark should go once dropped");
+assert.ok(view.renderer.getItem("Drop/Inbox").isExpanded,"a closed folder should open to show what arrived");
+assert.ok(
+	notices.some((n) => n.includes("hidden")) && notices.some((n) => n.includes("folder")),
+	"it should say what cannot be seen and what was left out: " + notices.join(" | "),
+);
+
+// A note row stands for the folder it is in; empty space for the vault root.
+dragFromOutside("drop", rowFor("Drop/Inbox/Letter.md"), [outsideFile("Beside.md")]);
+dragFromOutside("drop", view.renderer.containerEl, [outsideFile("At root.md")]);
+await new Promise((resolve) => setTimeout(resolve, 20));
+assert.ok(byPath.get("Drop/Inbox/Beside.md"), "a drop on a note should land in its folder");
+assert.ok(byPath.get("At root.md"), "a drop on empty space should land in the vault root");
+
+// Text dragged from a browser is not files: the tree must leave it alone.
+const text = new window.Event("dragover", { bubbles: true, cancelable: true });
+text.dataTransfer = { types: ["text/plain"], items: [] };
+inboxRow.dispatchEvent(text);
+assert.ok(!text.defaultPrevented, "a drag without files should be left to others");
+
+console.log("drop from outside: ok");
 
 // --- Touch gestures ----------------------------------------------------------
 //

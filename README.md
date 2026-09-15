@@ -38,7 +38,10 @@ density of the built-in file explorer.
   so there is one set of rules however the move was started
 - Inline rename, new note / new folder, **Make a copy**, delete via trash
 - Drag, move, style or delete a whole selection at once; a target that suits
-  only some of them takes those and leaves the rest where they are
+  only some of them takes those and leaves the rest where they are. Dropped on
+  a folder row, a selection lands at the bottom in the order it was picked up
+- Drop files from your system's file manager onto a folder to copy them in, as
+  the core file explorer does
 - Works the same on a phone: press and hold a row, then move to drag it or let
   go to open its menu
 
