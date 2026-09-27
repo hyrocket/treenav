@@ -18,7 +18,7 @@ import { SearchModal } from "../components/SearchModal";
 import { startInlineRename } from "../components/InlineRename";
 import { TreeItem } from "../components/TreeItem";
 import { TreeRenderer, TreeRendererHost } from "../components/TreeRenderer";
-import { parentPath } from "../state/paths";
+import { outermost, parentPath } from "../state/paths";
 import { TREENAV_ICON, TREENAV_VIEW_TYPE, TreeNavStyle } from "../types";
 import { OutlineEdge } from "../services/OutlineService";
 import { TreeKeymap, TreeKeymapActions } from "./TreeKeymap";
@@ -858,7 +858,10 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	 * Deleting several always asks, whatever the setting says: the setting was
 	 * agreed to for one file at a time, and a set is a bigger thing to undo.
 	 */
-	private confirmDeleteAll(files: TAbstractFile[]): void {
+	private confirmDeleteAll(selected: TAbstractFile[]): void {
+		// A folder goes with everything inside it, so its contents are not
+		// separate things to delete — and trashing one twice would fail.
+		const files = outermost(selected);
 		const remove = async () => {
 			for (const file of files) await this.plugin.fileOps.trash(file);
 		};

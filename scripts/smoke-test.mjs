@@ -1675,6 +1675,76 @@ assert.ok(!text.defaultPrevented, "a drag without files should be left to others
 
 console.log("drop from outside: ok");
 
+// --- A folder picked together with what is inside it --------------------------
+//
+// An expanded folder makes it easy to select both the folder and its contents.
+// The folder travels with them, so moving the contents as well would take them
+// out of the folder they are in and flatten what was picked.
+
+for (const path of ["Drop/Src4/Folder J/j1.md", "Drop/Src4/Folder J/j2.md", "Drop/Bin/Doomed/gone.md"]) {
+	await app.vault.create(path);
+}
+
+const pickFolderAndContents = (folder) => {
+	view.rebuild();
+	placed.length = 0;
+	view.renderer.getItem("Drop").setExpanded(true);
+	view.renderer.getItem("Drop/Src4").setExpanded(true);
+	view.renderer.getItem(folder).setExpanded(true);
+	const paths = [folder, `${folder}/j1.md`, `${folder}/j2.md`];
+	paths.forEach((path, i) => placeRow(path, { top: i * 20 }));
+	paths.forEach((path, i) => click(path, i ? { ctrlKey: true } : {}));
+	return paths;
+};
+
+// Dropped onto a folder row.
+pickFolderAndContents("Drop/Src4/Folder J");
+placeRow("Drop/Dst", { top: 100 });
+drag("Drop/Src4/Folder J", { x: 150, y: 110 });
+await new Promise((resolve) => setTimeout(resolve, 20));
+
+assert.deepEqual(
+	pathsIn("Drop/Dst/Folder J"),
+	["j1.md", "j2.md"],
+	"a folder dropped with its contents should keep them",
+);
+assert.ok(!byPath.get("Drop/Dst/j1.md"), "its contents must not be moved in beside it");
+
+// Dropped on the line between two rows.
+pickFolderAndContents("Drop/Dst/Folder J");
+view.renderer.getItem("Drop/Sorted").setExpanded(true);
+placeRow("Drop/Sorted/Alpha.md", { top: 100 });
+drag("Drop/Dst/Folder J", { x: 150, y: 115 });
+await new Promise((resolve) => setTimeout(resolve, 20));
+
+assert.deepEqual(
+	pathsIn("Drop/Sorted/Folder J"),
+	["j1.md", "j2.md"],
+	"the same holds for a drop between rows",
+);
+assert.ok(!byPath.get("Drop/Sorted/j1.md"), "and its contents stay inside it there too");
+
+// Deleting: trashing the folder takes the contents, so trashing them again
+// would fail on a file that is already gone.
+view.rebuild();
+view.renderer.getItem("Drop").setExpanded(true);
+view.renderer.getItem("Drop/Bin").setExpanded(true);
+view.renderer.getItem("Drop/Bin/Doomed").setExpanded(true);
+click("Drop/Bin/Doomed");
+click("Drop/Bin/Doomed/gone.md", { ctrlKey: true });
+
+notices.length = 0;
+view.deleteItem(view.renderer.getItem("Drop/Bin/Doomed"));
+const confirm = openedModals.at(-1);
+assert.match(confirm.message, /^1 item/, "the dialog should count one thing to delete: " + confirm.message);
+[...confirm.contentEl.querySelectorAll("button")].find((b) => b.textContent === "Delete").click();
+await new Promise((resolve) => setTimeout(resolve, 20));
+
+assert.equal(byPath.get("Drop/Bin/Doomed"), undefined, "the folder should be gone");
+assert.deepEqual(notices, [], "and nothing should have been deleted twice: " + notices.join(" | "));
+
+console.log("folder with its contents: ok");
+
 // --- Touch gestures ----------------------------------------------------------
 //
 // A finger produces no HTML5 drag events at all, which is why the drag layer is

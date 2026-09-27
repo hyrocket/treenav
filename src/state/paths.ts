@@ -29,3 +29,18 @@ export function parentPath(path: string): string {
 export function joinPath(parent: string, name: string): string {
 	return parent === "/" || parent === "" ? name : `${parent}/${name}`;
 }
+
+/**
+ * The items of a set that no other item in it already contains.
+ *
+ * A folder travels with everything inside it, so a selection holding both a
+ * folder and its contents means one thing to move, not several. Acting on the
+ * contents separately would take them out of the folder they are in and
+ * flatten what the user picked — which is what an expanded folder makes easy
+ * to select by accident.
+ */
+export function outermost<T extends { path: string }>(files: T[]): T[] {
+	return files.filter(
+		(file) => !files.some((other) => other !== file && isSameOrDescendant(file.path, other.path)),
+	);
+}

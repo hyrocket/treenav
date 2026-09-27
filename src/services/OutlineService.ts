@@ -1,4 +1,5 @@
 import { TAbstractFile, TFile, TFolder } from "obsidian";
+import { outermost } from "../state/paths";
 import { StateStore } from "../state/StateStore";
 import { FileOpsService } from "./FileOpsService";
 import { TreeService } from "./TreeService";
@@ -53,14 +54,16 @@ export class OutlineService {
 	 * The same, for several items at once, keeping the order they were in.
 	 *
 	 * Dropping after a row inserts each one directly below it, so working
-	 * backwards is what leaves the set in its original order.
+	 * backwards is what leaves the set in its original order. A folder in the
+	 * set brings its own contents, so those are not moved again on their own.
 	 */
 	async placeAllNextTo(
 		sources: TAbstractFile[],
 		target: TAbstractFile,
 		position: OutlinePosition,
 	): Promise<void> {
-		const ordered = position === "after" ? [...sources].reverse() : sources;
+		const carried = outermost(sources);
+		const ordered = position === "after" ? [...carried].reverse() : carried;
 		for (const source of ordered) {
 			if (source !== target) await this.placeNextTo(source, target, position);
 		}
@@ -72,13 +75,14 @@ export class OutlineService {
 	 * A folder the user has put in order takes them at the bottom, in the order
 	 * they were given — the same place a new note lands. A sorted folder files
 	 * them by name like anything else, and stays sorted. Whatever cannot go in
-	 * stays where it is.
+	 * stays where it is, and a folder in the set carries its contents rather
+	 * than having them moved in beside it.
 	 *
 	 * One at a time: two moves at once can race for the same name.
 	 */
 	async moveAllInto(sources: TAbstractFile[], folder: TFolder): Promise<void> {
 		const arrived: TAbstractFile[] = [];
-		for (const source of sources) {
+		for (const source of outermost(sources)) {
 			if (source.parent === folder || this.fileOps.checkMove(source, folder) !== null) continue;
 			const moved = await this.fileOps.move(source, folder);
 			if (moved.ok) arrived.push(source);

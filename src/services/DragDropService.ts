@@ -1,5 +1,5 @@
 import { App, Notice, TAbstractFile, TFile, TFolder } from "obsidian";
-import { isSameOrDescendant } from "../state/paths";
+import { isSameOrDescendant, outermost } from "../state/paths";
 import { FileOpsService } from "./FileOpsService";
 import { OutlineService } from "./OutlineService";
 import { TreeService } from "./TreeService";
@@ -452,7 +452,8 @@ export class DragDropService {
 				return;
 			case "nest":
 				// The first one turns the note into a folder; the rest join it.
-				for (const source of sources) {
+				// A folder takes its own contents along, so they do not join too.
+				for (const source of outermost(sources)) {
 					if (this.canNest(source, target as TFile)) {
 						await this.outline.nestUnder(source, target as TFile);
 					}
