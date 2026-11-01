@@ -595,3 +595,9 @@ button.treenav-is-on {
 .treenav-style-classic .treenav-item.treenav-is-leaf > .treenav-item-self > .treenav-collapse-icon {
 	visibility: hidden;
 }
+
+/* A setting that depends on something switched off elsewhere says so. */
+.treenav-setting-warning {
+	margin-top: var(--size-4-1);
+	color: var(--text-warning);
+}

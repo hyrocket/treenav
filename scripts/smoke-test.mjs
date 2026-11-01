@@ -240,6 +240,9 @@ class Plugin extends Component {
 	addRibbonIcon() {
 		return document.createElement("div");
 	}
+	registerHoverLinkSource(id, info) {
+		this.app.__hoverSources.set(id, info);
+	}
 	addCommand() {}
 	async loadData() {
 		return this.data;
@@ -499,6 +502,8 @@ const spec = benchArg
 			"Archive/2024/Q1/Old note.md",
 			"빈 폴더/",
 			"attachment.txt",
+			"Board.canvas",
+			"Sketch.excalidraw",
 		];
 
 const { root, byPath } = buildVault(spec);
@@ -706,6 +711,8 @@ const openLeaves = [];
 
 /** What the workspace reports as the note being edited. */
 let activeFile = null;
+/** Workspace events the plugin raised, newest last. */
+const triggered = [];
 
 /** Tags the fake metadata cache reports. Keyed by name: files get moved here. */
 const TAGS = {
@@ -718,6 +725,7 @@ const layoutReady = [];
 
 const app = {
 	__viewFactories: new Map(),
+	__hoverSources: new Map(),
 	vault: {
 		getRoot: () => root,
 		getAbstractFileByPath: (p) => byPath.get(p) ?? null,
@@ -793,7 +801,7 @@ const app = {
 		// The plugin fans work out to its open views through here, so the one the
 		// run creates has to be reachable.
 		getLeavesOfType: (type) => openLeaves.filter((leaf) => leaf.view?.getViewType?.() === type),
-		trigger: () => {},
+		trigger: (name, ...args) => triggered.push([name, ...args]),
 	},
 };
 
@@ -836,6 +844,7 @@ const PLUGIN_RESERVED = [
 	"registerView",
 	"addCommand",
 	"addRibbonIcon",
+	"registerHoverLinkSource",
 	"addSettingTab",
 	"loadData",
 	"saveData",
@@ -917,6 +926,17 @@ assert.ok(
 	"the settings tab did not build its rows",
 );
 
+// The hover preview needs a core plugin; with it off, the setting says so.
+const previewWarning = () => plugin.settingTab.containerEl.querySelector(".treenav-setting-warning");
+assert.ok(!previewWarning(), "no warning when Page preview cannot be asked about");
+app.internalPlugins = { getEnabledPluginById: () => null };
+plugin.settingTab.display();
+assert.ok(previewWarning(), "a warning when Page preview is off");
+app.internalPlugins = { getEnabledPluginById: (id) => (id === "page-preview" ? {} : null) };
+plugin.settingTab.display();
+assert.ok(!previewWarning(), "none when it is on");
+delete app.internalPlugins;
+
 const factory = app.__viewFactories.get("treenav-view");
 assert.ok(factory, "the view type was never registered");
 
@@ -949,6 +969,7 @@ assert.equal(
 assert.ok(rows.length > 0, "the tree rendered no rows at all");
 assert.ok(!titles.some((t) => t.endsWith(".md")), "no row should show a .md extension");
 assert.ok(!titles.includes("attachment.txt"), "non-markdown files should be hidden");
+assert.ok(titles.includes("Board.canvas"), "a canvas is a document, not an attachment");
 
 // Every row keeps an icon slot so titles stay aligned.
 assert.equal(
@@ -1988,6 +2009,8 @@ assert.ok(
 
 assert.ok(found("", { kind: "attachments" }).includes("attachment.txt"), "attachments filter");
 assert.ok(!found("", { kind: "notes" }).includes("attachment.txt"), "notes filter excludes it");
+assert.ok(found("", { kind: "notes" }).includes("Board.canvas"), "notes filter keeps a canvas");
+assert.ok(!found("", { kind: "attachments" }).includes("Board.canvas"), "a canvas is not an attachment");
 assert.deepEqual(found("", { extension: "txt" }), ["attachment.txt"], "extension filter");
 
 // A parent tag stands for everything under it.
@@ -2054,5 +2077,134 @@ assert.equal(view.renderer.getSelected()?.path, chosen.path, "and land on the ro
 activeFile = null;
 
 console.log("find dialog: ok");
+
+// --- Formats that are not notes -----------------------------------------------
+//
+// A canvas, a base and whatever a plugin opens as its own view are documents:
+// they stay listed with attachments hidden, as in the core explorer. The core
+// explorer asks the view registry, and so do we.
+
+view.rebuild();
+const iconOf = (path) => rowFor(path)?.querySelector(".treenav-item-icon .svg-icon")?.getAttribute("data-icon");
+assert.equal(iconOf("Board.canvas"), "layout-dashboard", "a canvas gets Obsidian's canvas icon");
+assert.equal(iconOf("Archive"), "folder-closed", "a folder keeps the folder icon");
+assert.ok(!rowFor("Sketch.excalidraw"), "a format nothing opens stays hidden");
+
+app.viewRegistry = { isExtensionRegistered: (ext) => ["excalidraw", "png", "pdf"].includes(ext) };
+view.rebuild();
+assert.ok(rowFor("Sketch.excalidraw"), "a format a plugin opens is a document");
+assert.equal(iconOf("Sketch.excalidraw"), "file-text", "with the plain file icon");
+assert.ok(!rowFor("Drop/Inbox/photo.png"), "an image is still an attachment");
+delete app.viewRegistry;
+view.rebuild();
+
+console.log("other formats: ok");
+
+// --- Page preview on hover -------------------------------------------------------
+
+assert.equal(app.__hoverSources.size, 0, "TreeNav borrows the file explorer's source, not one of its own");
+
+const hoverOver = (path) => {
+	triggered.length = 0;
+	const title = rowFor(path).querySelector(".treenav-item-title");
+	title.dispatchEvent(new window.MouseEvent("mouseover", { bubbles: true }));
+	return triggered.filter(([name]) => name === "hover-link").map(([, info]) => info);
+};
+
+const [boardHover] = hoverOver("Board.canvas");
+assert.equal(boardHover?.linktext, "Board.canvas", "pointing at a row offers its file");
+assert.equal(boardHover.source, "file-explorer", "so Ctrl is needed exactly when the core explorer needs it");
+assert.equal(boardHover.targetEl, rowFor("Board.canvas"), "anchored on the row");
+assert.equal(boardHover.hoverParent, view);
+assert.equal(hoverOver("Ideas")[0]?.linktext, "Ideas/Ideas.md", "a folder offers its folder note");
+await app.vault.createFolder("Bare");
+view.rebuild();
+assert.equal(hoverOver("Bare").length, 0, "a folder with no note offers nothing");
+
+plugin.state.settings.hoverPreview = false;
+assert.equal(hoverOver("Board.canvas").length, 0, "the setting turns it off");
+plugin.state.settings.hoverPreview = true;
+
+console.log("hover preview: ok");
+
+// --- Dragging out of the tree ----------------------------------------------------
+//
+// On desktop a mouse drag goes through Obsidian's drag layer, the one the core
+// explorer uses, so the editor, the tab bar and canvas accept it. Inside the
+// tree it still lands by the same zones.
+
+const dragLog = [];
+app.dragManager = {
+	dragFile: (event, file) => ({ type: "file", file }),
+	dragFolder: (event, folder) => ({ type: "folder", file: folder }),
+	dragFiles: (event, files) => ({ type: "files", files }),
+	onDragStart: (event, draggable) => dragLog.push(["start", draggable]),
+	setAction: (action) => dragLog.push(["action", action]),
+};
+
+/** jsdom has no DragEvent, so the position and the transfer are attached. */
+const htmlDrag = (type, el, x, y) => {
+	const event = new window.Event(type, { bubbles: true, cancelable: true });
+	Object.assign(event, { clientX: x, clientY: y, dataTransfer: { types: ["text/plain"], dropEffect: "none", items: [] } });
+	el.dispatchEvent(event);
+	return event;
+};
+
+view.rebuild();
+placed.length = 0;
+view.renderer.getItem("Ideas").setExpanded(true);
+placeRow("Ideas/Welcome.md", { top: 0 });
+placeRow("Archive", { top: 40 });
+
+const outRow = rowFor("Ideas/Welcome.md");
+assert.ok(outRow.draggable, "a row should be draggable for the mouse");
+
+// The pointer drag stands aside for the mouse.
+outRow.dispatchEvent(pointer("pointerdown", 100, 10));
+window.dispatchEvent(pointer("pointermove", 120, 10));
+assert.ok(!document.body.querySelector(".treenav-drag-ghost"), "the mouse should not start the pointer drag");
+window.dispatchEvent(pointer("pointerup", 120, 10));
+
+htmlDrag("dragstart", outRow, 100, 10);
+const [, started] = dragLog.find(([kind]) => kind === "start") ?? [];
+assert.equal(started?.file, byPath.get("Ideas/Welcome.md"), "the drag is handed to Obsidian as that file");
+assert.ok(outRow.classList.contains("treenav-is-dragging"), "the row shows it is moving");
+
+const intoArchive = htmlDrag("dragover", rowFor("Archive"), 150, 50);
+assert.ok(intoArchive.defaultPrevented, "the tree claims the drag, so no split is offered over it");
+assert.equal(intoArchive.dataTransfer.dropEffect, "move");
+assert.equal(dragLog.at(-1)[1], "Move into Archive", "the preview says what letting go does");
+
+htmlDrag("drop", rowFor("Archive"), 150, 50);
+await wait(5);
+assert.ok(byPath.get("Archive/Welcome.md"), "the drop should move the note");
+assert.ok(!outRow.classList.contains("treenav-is-dragging"), "and end the drag");
+
+// Over nothing that takes it: still claimed, but refused.
+view.rebuild();
+placed.length = 0;
+view.renderer.getItem("Archive").setExpanded(true);
+placeRow("Archive/Welcome.md", { top: 0 });
+const again = rowFor("Archive/Welcome.md");
+htmlDrag("dragstart", again, 100, 10);
+const nowhere = htmlDrag("dragover", content.querySelector(".treenav-tree"), 150, 500);
+assert.ok(nowhere.defaultPrevented, "the tree still claims it");
+assert.equal(nowhere.dataTransfer.dropEffect, "none", "but says it cannot drop there");
+assert.equal(dragLog.at(-1)[1], null, "and shows no action");
+
+// Let go in the editor, say: the tree only hears that it ended.
+window.dispatchEvent(new window.Event("dragend"));
+assert.ok(!again.classList.contains("treenav-is-dragging"), "a drag that left should be cleaned up");
+assert.ok(byPath.get("Archive/Welcome.md"), "and move nothing");
+
+// A phone keeps the pointer drag: there is no mouse to hand over.
+obsidianStub.Platform.isMobile = true;
+view.rebuild();
+assert.ok(!rowFor("Archive").draggable, "on mobile rows are not HTML5 draggable");
+obsidianStub.Platform.isMobile = false;
+delete app.dragManager;
+view.rebuild();
+
+console.log("drag out: ok");
 
 console.log("\nsmoke test passed");

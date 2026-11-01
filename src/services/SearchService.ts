@@ -1,4 +1,5 @@
 import { App, TFile, getAllTags } from "obsidian";
+import { isDocument } from "./fileKinds";
 
 /** What kind of file a search is willing to return. */
 export type SearchKind = "any" | "notes" | "attachments";
@@ -105,8 +106,8 @@ export class SearchService {
 	}
 
 	private passes(file: TFile, filters: SearchFilters, age: { from: number; to: number }): boolean {
-		if (filters.kind === "notes" && file.extension !== "md") return false;
-		if (filters.kind === "attachments" && file.extension === "md") return false;
+		if (filters.kind === "notes" && !isDocument(this.app, file)) return false;
+		if (filters.kind === "attachments" && isDocument(this.app, file)) return false;
 		if (filters.extension && file.extension !== filters.extension) return false;
 		if (file.stat.mtime < age.from || file.stat.mtime >= age.to) return false;
 

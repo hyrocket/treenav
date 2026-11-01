@@ -1,4 +1,4 @@
-import { App, Notice, TAbstractFile, TFile, TFolder } from "obsidian";
+import { App, Notice, Platform, TAbstractFile, TFile, TFolder } from "obsidian";
 import { isSameOrDescendant, outermost } from "../state/paths";
 import { FileOpsService } from "./FileOpsService";
 import { OutlineService } from "./OutlineService";
@@ -18,6 +18,23 @@ const EDGE_SPEED = 8;
 
 /** Where a drop would put the dragged items, relative to the row under the pointer. */
 export type DropMode = "into" | "nest" | "before" | "after";
+
+/** What Obsidian's drag layer knows a drag by. Opaque to us. */
+type Draggable = object;
+
+/**
+ * Obsidian's own drag layer, the one the core explorer drags with. Not in the
+ * public typings. A drag it started is one the editor, the tab bar, the split
+ * edges and canvas all understand.
+ */
+interface DragManager {
+	dragFile(event: DragEvent, file: TFile): Draggable | null;
+	dragFolder(event: DragEvent, folder: TFolder): Draggable | null;
+	dragFiles(event: DragEvent, files: TAbstractFile[]): Draggable | null;
+	onDragStart(event: DragEvent, draggable: Draggable): void;
+	/** The line under the drag preview saying what letting go would do. */
+	setAction(action: string | null): void;
+}
 
 /** The subset of a row the drag layer needs; `TreeItem` satisfies it. */
 export interface DropTargetRow {
@@ -65,6 +82,12 @@ interface Press {
  * selection takes the whole selection with it. A target that suits some of them
  * and not others is still offered, and the ones it does not suit stay where they
  * are — refusing the whole drop over one item would be the worse answer.
+ *
+ * On desktop a mouse drag is an HTML5 one after all, handed to Obsidian's drag
+ * layer: only that kind can leave the tree, and the core explorer's drags are
+ * what the editor (a link), the tab bar (open it there) and canvas (a card)
+ * accept. Inside the tree it lands by the same zones as the pointer drag. Touch
+ * keeps the pointer drag, which is the one that works under a finger.
  */
 export class DragDropService {
 	/**
@@ -99,6 +122,9 @@ export class DragDropService {
 	private scrollFrame: number | null = null;
 	private scrollSpeed = 0;
 
+	/** The current drag is an HTML5 one, owned by Obsidian's drag layer. */
+	private native = false;
+
 	constructor(
 		private readonly app: App,
 		private readonly fileOps: FileOpsService,
@@ -110,12 +136,23 @@ export class DragDropService {
 	attachRow(row: DropTargetRow): void {
 		this.rows.set(row.rowEl, row);
 		row.rowEl.addEventListener("pointerdown", (event) => this.onPointerDown(event, row));
+		if (this.dragManager()) {
+			row.rowEl.draggable = true;
+			row.rowEl.addEventListener("dragstart", (event) => this.onNativeDragStart(event, row));
+		}
 	}
 
 	/** The vault root accepts drops on the empty space below the tree. */
 	attachRootTarget(el: HTMLElement): void {
 		this.container = el;
 		this.attachExternalDrop(el);
+		this.attachNativeDrop(el);
+	}
+
+	/** Obsidian's drag layer, where a drag through it is the right kind. */
+	private dragManager(): DragManager | null {
+		if (Platform.isMobile) return null;
+		return (this.app as App & { dragManager?: DragManager }).dragManager ?? null;
 	}
 
 	// --- The press ---------------------------------------------------------
@@ -125,6 +162,8 @@ export class DragDropService {
 		if (event.button !== 0 || this.press) return;
 		// An inline rename owns its own pointer: selecting text is not a drag.
 		if (event.target instanceof HTMLInputElement) return;
+		// A mouse drags through Obsidian's drag layer instead (`onNativeDragStart`).
+		if (event.pointerType === "mouse" && this.dragManager()) return;
 
 		this.doc = row.rowEl.ownerDocument;
 		this.win = this.doc.defaultView ?? window;
@@ -198,24 +237,37 @@ export class DragDropService {
 
 		this.reset();
 
-		if (dragging && sources.length > 0) {
-			if (target && mode) {
-				void this.execute(sources, target.file, mode);
-				return;
-			}
-			// Released over the tree but not over a row: the vault root.
-			if (!target && this.isOverContainer(event.clientX, event.clientY)) {
-				const root = this.app.vault.getRoot();
-				if (sources.some((source) => this.canMoveInto(source, root))) {
-					void this.outline.moveAllInto(sources, root);
-					return;
-				}
-			}
-		}
+		if (dragging && this.drop(sources, target, mode, event.clientX, event.clientY)) return;
 
 		// Held in place and let go: what a long press means everywhere else.
 		if (armed && !moved) press.row.showContextMenu(event);
 	};
+
+	/**
+	 * Carries out a drop on the row under the pointer, or on the vault root when
+	 * it was let go over the empty part of the tree. `false` when it lands nowhere.
+	 */
+	private drop(
+		sources: TAbstractFile[],
+		target: DropTargetRow | null,
+		mode: DropMode | null,
+		x: number,
+		y: number,
+	): boolean {
+		if (sources.length === 0) return false;
+		if (target && mode) {
+			void this.execute(sources, target.file, mode);
+			return true;
+		}
+		if (!target && this.isOverContainer(x, y)) {
+			const root = this.app.vault.getRoot();
+			if (sources.some((source) => this.canMoveInto(source, root))) {
+				void this.outline.moveAllInto(sources, root);
+				return true;
+			}
+		}
+		return false;
+	}
 
 	private onPointerCancel = (event: PointerEvent): void => {
 		if (this.press && event.pointerId !== this.press.pointerId) return;
@@ -363,6 +415,7 @@ export class DragDropService {
 		this.markDragging(false);
 		this.sources = [];
 		this.press = null;
+		this.native = false;
 
 		this.ghost?.detach();
 		this.ghost = null;
@@ -383,6 +436,106 @@ export class DragDropService {
 		this.win.removeEventListener("keydown", this.onKeyDown, true);
 		this.win.removeEventListener("contextmenu", this.blockContextMenu, true);
 		this.win.removeEventListener("touchmove", this.blockTouchScroll);
+		this.win.removeEventListener("dragend", this.onNativeDragEnd, true);
+	}
+
+	// --- The mouse drag on desktop -----------------------------------------
+
+	private onNativeDragStart(event: DragEvent, row: DropTargetRow): void {
+		const manager = this.dragManager();
+		if (!manager || !event.dataTransfer) return;
+		// A row being renamed holds a text field; dragging there selects text.
+		if (row.rowEl.querySelector("input")) {
+			event.preventDefault();
+			return;
+		}
+
+		this.reset();
+		this.doc = row.rowEl.ownerDocument;
+		this.win = this.doc.defaultView ?? window;
+
+		const set = this.resolveDragSet?.(row.file) ?? [];
+		const sources = set.length > 0 ? set : [row.file];
+		const only = sources.length === 1 ? sources[0] : null;
+		const draggable =
+			only instanceof TFile
+				? manager.dragFile(event, only)
+				: only instanceof TFolder
+					? manager.dragFolder(event, only)
+					: manager.dragFiles(event, sources);
+		if (!draggable) {
+			event.preventDefault();
+			return;
+		}
+
+		manager.onDragStart(event, draggable);
+		this.sources = sources;
+		this.native = true;
+		this.markDragging(true);
+		// However it ends — in the tree, elsewhere in the app, or nowhere.
+		this.win.addEventListener("dragend", this.onNativeDragEnd, true);
+	}
+
+	private onNativeDragEnd = (): void => {
+		if (this.native) this.reset();
+	};
+
+	/**
+	 * Lands a mouse drag inside the tree. Claiming the event is also what keeps
+	 * the workspace from offering to open the item in a split over the sidebar:
+	 * Obsidian's handlers further out step aside for a drag already handled.
+	 */
+	private attachNativeDrop(container: HTMLElement): void {
+		container.addEventListener("dragover", (event) => {
+			if (!this.native || !event.dataTransfer) return;
+			event.preventDefault();
+
+			this.trackPointer(event.clientX, event.clientY);
+			const action = this.describeDrop(event.clientX, event.clientY);
+			event.dataTransfer.dropEffect = action ? "move" : "none";
+			this.dragManager()?.setAction(action);
+		});
+		container.addEventListener("dragleave", (event) => {
+			if (!this.native) return;
+			if (event.relatedTarget instanceof Node && container.contains(event.relatedTarget)) return;
+			this.clearIndicator();
+			container.removeClass("treenav-is-drop-target");
+			this.updateDwell(null, null);
+			this.scrollSpeed = 0;
+		});
+		container.addEventListener("drop", (event) => {
+			if (!this.native) return;
+			event.preventDefault();
+
+			const { clientX: x, clientY: y } = event;
+			const target = this.rowAt(x, y);
+			const mode = target ? this.resolveMode(x, y, target) : null;
+			const sources = this.sources;
+			this.reset();
+			this.drop(sources, target, mode, x, y);
+		});
+	}
+
+	/** The words under the drag preview, or `null` where letting go does nothing. */
+	private describeDrop(x: number, y: number): string | null {
+		const row = this.rowAt(x, y);
+		if (!row) {
+			const root = this.app.vault.getRoot();
+			const takes =
+				this.isOverContainer(x, y) && this.sources.some((source) => this.canMoveInto(source, root));
+			return takes ? "Move to the vault root" : null;
+		}
+		switch (this.resolveMode(x, y, row)) {
+			case "into":
+				return `Move into ${row.displayName}`;
+			case "nest":
+				return `Nest under ${row.displayName}`;
+			case "before":
+			case "after":
+				return "Move here";
+			default:
+				return null;
+		}
 	}
 
 	// --- Intent ------------------------------------------------------------

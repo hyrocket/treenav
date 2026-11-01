@@ -27,6 +27,18 @@ export class TreeNavSettingTab extends PluginSettingTab {
 		super(app, plugin);
 	}
 
+	/**
+	 * `true` only when Page preview is known to be off. Core plugins are not in
+	 * the public typings; if they cannot be asked, no warning is shown.
+	 */
+	private isPagePreviewOff(): boolean {
+		const internal = (this.app as App & {
+			internalPlugins?: { getEnabledPluginById?(id: string): unknown };
+		}).internalPlugins;
+		if (!internal?.getEnabledPluginById) return false;
+		return !internal.getEnabledPluginById("page-preview");
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -91,6 +103,24 @@ export class TreeNavSettingTab extends PluginSettingTab {
 				}),
 			);
 
+		const preview = new Setting(containerEl)
+			.setName("Preview notes on hover")
+			.setDesc(
+				"Point at a note to see a preview of it, as in the core file explorer. The preview is drawn by the Page preview core plugin, so it only appears while that plugin is on (Settings → Core plugins → Page preview). Whether Ctrl (Cmd on macOS) has to be held is Page preview's option for the file explorer — TreeNav follows the same one, so both behave alike.",
+			)
+			.addToggle((toggle) =>
+				toggle.setValue(settings.hoverPreview).onChange(async (value) => {
+					settings.hoverPreview = value;
+					await commit(false);
+				}),
+			);
+		if (this.isPagePreviewOff()) {
+			preview.descEl.createDiv({
+				cls: "treenav-setting-warning",
+				text: "Page preview is turned off in this vault, so no preview will appear until it is turned on.",
+			});
+		}
+
 		new Setting(containerEl).setName("Shortcuts").setHeading();
 
 		new Setting(containerEl)
@@ -118,7 +148,7 @@ export class TreeNavSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Show non-markdown files")
-			.setDesc("Also list images, PDFs and other attachments.")
+			.setDesc("Also list images, PDFs and other attachments. Notes, canvases, bases and formats other plugins open are always listed.")
 			.addToggle((toggle) =>
 				toggle.setValue(settings.showNonMarkdownFiles).onChange(async (value) => {
 					settings.showNonMarkdownFiles = value;

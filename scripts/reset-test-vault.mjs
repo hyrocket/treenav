@@ -39,6 +39,8 @@ const FIXTURE = {
 	"A very long note name used to check that the title is truncated with an ellipsis.md":
 		"# Long name\n",
 	"attachment.txt": "Not markdown. Hidden unless 'Show non-markdown files' is on.\n",
+	"Board.canvas": '{"nodes":[],"edges":[]}\n',
+	"Base.base": "views:\n  - type: table\n    name: Table\n",
 };
 
 /** Folders that exist with no files in them. */

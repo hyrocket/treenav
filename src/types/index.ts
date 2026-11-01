@@ -61,6 +61,8 @@ export interface TreeNavSettings {
 	rememberExpandedFolders: boolean;
 	/** Follow the note being opened, wherever it was opened from. */
 	revealActiveNote: boolean;
+	/** Offer a row to Page preview, so Ctrl-hover previews the note. */
+	hoverPreview: boolean;
 	/** Ask before moving an item to the trash. */
 	confirmDelete: boolean;
 	/** Draw a default icon on items with no icon of their own. */
@@ -82,6 +84,7 @@ export const DEFAULT_SETTINGS: TreeNavSettings = {
 	hideFolderNoteFiles: true,
 	rememberExpandedFolders: true,
 	revealActiveNote: false,
+	hoverPreview: true,
 	confirmDelete: true,
 	showDefaultIcons: true,
 	treeStyle: "modern",

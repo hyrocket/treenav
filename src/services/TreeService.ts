@@ -1,7 +1,8 @@
-import { TAbstractFile, TFile, TFolder } from "obsidian";
+import { App, TAbstractFile, TFile, TFolder } from "obsidian";
 import { StateStore } from "../state/StateStore";
 import { SortMode } from "../types";
 import { FolderNoteService } from "./FolderNoteService";
+import { isDocument } from "./fileKinds";
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
@@ -22,6 +23,7 @@ function rank(file: TAbstractFile, mode: SortMode): number {
 /** Decides which children of a folder are shown and in which order. */
 export class TreeService {
 	constructor(
+		private readonly app: App,
 		private readonly state: StateStore,
 		private readonly folderNotes: FolderNoteService,
 	) {}
@@ -36,7 +38,7 @@ export class TreeService {
 				continue;
 			}
 			const file = child as TFile;
-			if (!settings.showNonMarkdownFiles && file.extension !== "md") continue;
+			if (!settings.showNonMarkdownFiles && !isDocument(this.app, file)) continue;
 			if (settings.hideFolderNoteFiles && this.folderNotes.isFolderNote(file)) continue;
 			visible.push(file);
 		}

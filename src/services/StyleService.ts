@@ -1,4 +1,4 @@
-import { TAbstractFile, TFolder, setIcon } from "obsidian";
+import { TAbstractFile, TFile, TFolder, setIcon } from "obsidian";
 import { StateStore } from "../state/StateStore";
 import { FontFamily, FontToken, TreeNavStyle } from "../types";
 
@@ -24,6 +24,12 @@ export function resolveFontFamily(value: FontFamily | undefined): string {
 	return (value && FONT_STACKS[value]) ?? "";
 }
 const NOTE_ICON = "file-text";
+
+/** Formats that read as something other than a page: the icons Obsidian gives them. */
+const ICON_BY_EXTENSION: Record<string, string> = {
+	canvas: "layout-dashboard",
+	base: "layout-list",
+};
 
 const PICTOGRAPHIC = /\p{Extended_Pictographic}/u;
 const VARIATION_SELECTOR = "️";
@@ -124,7 +130,12 @@ export class StyleService {
 		iconEl.addClass("treenav-is-default-icon");
 		if (!this.state.settings.showDefaultIcons) return;
 
-		const isRealFolder = file instanceof TFolder && !this.state.isNested(file.path);
-		setIcon(iconEl, isRealFolder ? FOLDER_ICON : NOTE_ICON);
+		setIcon(iconEl, this.defaultIcon(file));
+	}
+
+	private defaultIcon(file: TAbstractFile): string {
+		if (file instanceof TFolder) return this.state.isNested(file.path) ? NOTE_ICON : FOLDER_ICON;
+		if (file instanceof TFile) return ICON_BY_EXTENSION[file.extension] ?? NOTE_ICON;
+		return NOTE_ICON;
 	}
 }

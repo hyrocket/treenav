@@ -1,4 +1,6 @@
 import {
+	HoverParent,
+	HoverPopover,
 	ItemView,
 	Keymap,
 	Menu,
@@ -23,7 +25,15 @@ import { TREENAV_ICON, TREENAV_VIEW_TYPE, TreeNavStyle } from "../types";
 import { OutlineEdge } from "../services/OutlineService";
 import { TreeKeymap, TreeKeymapActions } from "./TreeKeymap";
 
-export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeymapActions {
+/** Page preview's key for the core file explorer. */
+const FILE_EXPLORER_HOVER_SOURCE = "file-explorer";
+
+export class TreeNavView
+	extends ItemView
+	implements TreeRendererHost, TreeKeymapActions, HoverParent
+{
+	/** The open page preview, owned by Obsidian; one per view. */
+	hoverPopover: HoverPopover | null = null;
 	private renderer: TreeRenderer | null = null;
 	private keymap: TreeKeymap | null = null;
 	private treeEl: HTMLElement | null = null;
@@ -78,6 +88,7 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 		treeEl.addEventListener("click", (event) => {
 			if (event.target === treeEl) this.renderer?.select(null);
 		});
+		treeEl.addEventListener("mouseover", (event) => this.onRowHover(event));
 		treeEl.addEventListener("contextmenu", (event) => {
 			if (event.target === treeEl) this.showRootMenu(event);
 		});
@@ -398,6 +409,39 @@ export class TreeNavView extends ItemView implements TreeRendererHost, TreeKeyma
 	onItemDoubleClick(item: TreeItem): void {
 		if (!item.isFolder) return;
 		item.setExpanded(false);
+	}
+
+	/**
+	 * Offers the row under the mouse to Page preview. A folder previews its
+	 * folder note, since that is what clicking it opens.
+	 *
+	 * It is offered as the core file explorer's own source, so whether Ctrl has
+	 * to be held is whatever the user chose for the file explorer: TreeNav
+	 * replaces that explorer, and should not answer the question differently.
+	 */
+	private onRowHover(event: MouseEvent): void {
+		if (!this.plugin.state.settings.hoverPreview) return;
+		const rowEl = event.target instanceof Element ? event.target.closest(".treenav-item-self") : null;
+		if (!(rowEl instanceof HTMLElement)) return;
+		// Moving between the parts of one row is not a new hover.
+		if (event.relatedTarget instanceof Node && rowEl.contains(event.relatedTarget)) return;
+
+		const path = rowEl.getAttribute("data-path");
+		const item = path ? this.renderer?.getItem(path) : undefined;
+		if (!item) return;
+		const file =
+			item.file instanceof TFile
+				? item.file
+				: this.plugin.folderNotes.getFolderNote(item.file as TFolder);
+		if (!file) return;
+
+		this.app.workspace.trigger("hover-link", {
+			event,
+			source: FILE_EXPLORER_HOVER_SOURCE,
+			hoverParent: this,
+			targetEl: rowEl,
+			linktext: file.path,
+		});
 	}
 
 	/** Middle click opens in a new tab, the gesture the modifier used to be. */
