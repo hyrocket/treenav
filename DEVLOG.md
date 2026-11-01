@@ -952,6 +952,86 @@ leaf의 `handleDrop`은 내부 드래그(`draggable`)에만 반응한다. 평범
 변경은 문제없다. 폰에서 항목을 옮기는 일 자체가 드물어 **1.0에서는 손대지 않는다.** 손가락
 드래그를 넣으려면 길게 누르기를 나눠 써야 하는데, 그러면 메뉴가 나빠진다.
 
+## 2026-11-01 — 기본 탐색기에서 되던 것
+
+### Canvas가 안 보였다
+
+실사용 보고. `.canvas` 파일이 트리에 없었다. "Show non-markdown files"가 꺼져 있으면
+`md`가 아닌 것을 전부 첨부파일로 보고 숨겼기 때문이다. Canvas는 Obsidian이 만드는
+문서다.
+
+처음에는 `md · canvas · base` 목록으로 고쳤다가, 코어 탐색기를 asar에서 보고 바꿨다.
+코어는 목록을 갖고 있지 않다:
+
+```js
+isSupportedFile(e) { return getConfig("showUnsupportedFiles") || viewRegistry.isExtensionRegistered(e.extension) }
+```
+
+**뷰가 등록된 확장자는 전부 보여준다.** 고정 목록이면 플러그인 형식(`.excalidraw` 등)이
+같은 식으로 사라진다. 그래서 `isDocument`(`services/fileKinds.ts`)는 뷰 레지스트리에
+묻고, 이미지·오디오·비디오·PDF만 계속 첨부파일로 둔다 — TreeNav는 기본으로 첨부파일을
+숨기므로 코어와 완전히 같지는 않다(의도된 차이). 검색의 Notes/Attachments 필터도 같은
+기준이다. 기본 아이콘은 Obsidian과 같게: Canvas `layout-dashboard`, Base `layout-list`.
+
+### 코어 탐색기와 대조
+
+같은 종류의 구멍이 더 있는지 asar과 소스를 대조했다. 메뉴(`file-menu`/`files-menu`로
+북마크·새 캔버스 등이 붙음)와 삭제·이름 변경(`fileManager`)은 이미 같았다. 빠져 있던 것:
+
+1. **트리 밖으로 끌기** — 에디터에 놓으면 `[[링크]]`, 탭 바·분할 가장자리에서 열기,
+   캔버스에 카드. 09-05 (5)에 "제대로 된 링크도 아니어서 아쉽지 않다"고 적었는데,
+   그건 우리 HTML5 구현이 경로 문자열만 넣었기 때문이다. **코어는 진짜 링크를 만든다.**
+   판단이 틀렸다
+2. **Ctrl-hover 미리보기** — 코어는 `hover-link`를 발생시킨다. 우리는 안 했다
+3. 정렬(수정·생성 시간, 역순), 툴팁의 날짜 — 1.1로
+
+### 끌어내기: 마우스만 다시 HTML5로
+
+코어의 `dragManager`는 HTML5 드래그 위에 있다. 포인터 이벤트로는 이것을 시작할 수 없으니
+에디터·탭 바가 알아듣는 드래그를 만들려면 HTML5여야 한다. 그래서 **데스크톱 마우스만**
+`draggable` + `dragstart`에서 `dragManager.dragFile/dragFolder/dragFiles` →
+`onDragStart`로 넘긴다. 터치·모바일은 포인터 드래그 그대로다.
+
+트리 안에서의 판정은 그대로 쓴다. `dragover`의 좌표를 `trackPointer`·`resolveMode`에
+넣고, `drop`은 포인터 드래그와 같은 `drop()`을 지난다. 끄는 동안 고스트 아래 문구는
+`setAction`("Move into Alpha" 등).
+
+**트리가 `dragover`를 `preventDefault`하는 것이 핵심이다.** 코어의 드롭 핸들러는
+`e.defaultPrevented`면 물러난다. 이걸 안 하면 바깥의 워크스페이스가 사이드바 위에
+"분할로 열기" 오버레이를 띄운다. 놓을 수 없는 자리에서도 가로채고 `dropEffect = "none"`.
+
+`dragManager`는 공개 타이핑에 없다. 없으면 포인터 드래그로 돌아간다.
+
+### 미리보기는 코어 탐색기의 출처로
+
+처음엔 `registerHoverLinkSource("treenav-view", { defaultMod: true })`로 넣었다. 실사용
+볼트에서 "안 된다"는 보고 — 원인은 둘이었다:
+
+- **Page preview 코어 플러그인이 꺼져 있었다.** 미리보기 창은 그 플러그인이 그린다.
+  이 경우 코어 탐색기도 안 된다
+- Ctrl 여부는 `overrides[source] ?? hoverLinkSources[source].defaultMod`로 정해진다.
+  이 볼트는 `page-preview.json`에 `"file-explorer": false`(Ctrl 없이)가 저장돼 있었고,
+  새 출처는 기본값(Ctrl 필요)을 받아 **코어와 다르게 굴었다**
+
+TreeNav는 코어 탐색기를 대신하는 것이므로 **`source: "file-explorer"`로 발생시킨다.**
+Page preview의 파일 탐색기 옵션 하나가 둘 다에 적용된다. 별도 등록은 뺐다. 폴더는 폴더
+노트를 미리 보여준다. 설정 "Preview notes on hover"(기본 켜짐)의 설명은 Page preview에
+의존한다는 것과 Ctrl 옵션이 어디 있는지를 항상 말하고, 플러그인이 꺼져 있으면 경고 줄이
+더 붙는다(`internalPlugins.getEnabledPluginById`, 물을 수 없으면 경고 없음).
+
+### 검증
+
+- 스모크: 캔버스 표시·아이콘, 레지스트리 형식 표시 / 이미지는 숨김, hover 발생 ·
+  출처 · 폴더 노트 · 설정 끔, HTML5 드래그(시작 → 폴더 위 문구 → 드롭 → 이동, 빈 곳은
+  거부, `dragend`로 정리, 모바일은 `draggable` 아님), 설정 경고 유무. 캔버스 테스트는
+  수정을 빼면 실패하는 것까지 확인
+- 격리된 Obsidian 1.12.7 (CDP `Input.setInterceptDrags` → `dispatchDragEvent`로 진짜
+  마우스 드래그): 에디터에 놓아 `[[한글 노트]]` 삽입, 트리 안 폴더로 이동, 분할 오버레이
+  없음. Ctrl-hover는 기본 설정에서 Ctrl일 때만, `file-explorer: false`에서는 그냥 올려도
+  뜸. 경고는 Page preview를 끌 때만
+- 한 번 hover가 전부 실패했는데, 앞 테스트가 연 설정 창이 트리를 덮고 있었다 —
+  `elementFromPoint`로 확인. 실험 사이에 모달을 닫을 것
+
 ### 배포 상태
 
 - GitHub: <https://github.com/hyrocket/treenav> — `main`이 origin과 같음
@@ -988,6 +1068,8 @@ leaf의 `handleDrop`은 내부 드래그(`draggable`)에만 반응한다. 평범
 - 아이콘 선택기 다단에서 위/아래 화살표가 격자 감각과 어긋남
 - ESLint 설정 없음
 - 바깥에서 폴더째 끌어오기 (지금은 알림만)
+- 정렬: 수정 시간 · 생성 시간 · 역순 (코어 탐색기에 있음)
+- 행 툴팁에 생성·수정 날짜 (코어 탐색기에 있음)
 
 ### 재개 방법
 
