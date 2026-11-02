@@ -1060,8 +1060,8 @@ Muted · Faint뿐이라 **아무것도 칠하지 않은 행보다 진한 선택�
 
 ### 배포 상태
 
-- GitHub: <https://github.com/hyrocket/treenav> — `main`이 origin보다 1커밋 앞섬
-  (`db259eb`, 아직 push 안 함)
+- GitHub: <https://github.com/hyrocket/treenav> — `main`에 push 안 한 커밋이 있음
+  (`db259eb` 견본 + 이 일지)
 - `test-vault`와 실사용 볼트 `D:\Obsidian_Files\Obsidian_HY` 양쪽에 최신 설치됨
 - **태그와 릴리스는 아직 없다.** 실사용 테스트 중 — 나오는 버그를 고친 뒤 태그 → 릴리스
 
