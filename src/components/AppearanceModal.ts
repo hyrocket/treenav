@@ -16,6 +16,9 @@ const SWATCHES: { name: string; value: string }[] = [
 	{ name: "Blue", value: "var(--color-blue)" },
 	{ name: "Purple", value: "var(--color-purple)" },
 	{ name: "Pink", value: "var(--color-pink)" },
+	// The tree's default is the muted nav colour, so without this nothing here is
+	// darker than an unstyled row. Pure black in light mode, pure white in dark.
+	{ name: "Black (white in dark mode)", value: "var(--treenav-ink)" },
 	{ name: "Muted", value: "var(--text-muted)" },
 	{ name: "Faint", value: "var(--text-faint)" },
 ];

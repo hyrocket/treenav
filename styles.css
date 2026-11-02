@@ -424,6 +424,15 @@ button.treenav-is-on {
 
 /* --- Color swatches ------------------------------------------------------ */
 
+/* Full-contrast text: black on a light theme, white on a dark one. */
+body.theme-light {
+	--treenav-ink: #000;
+}
+
+body.theme-dark {
+	--treenav-ink: #fff;
+}
+
 .treenav-swatch-grid {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
