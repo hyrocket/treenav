@@ -1032,9 +1032,36 @@ Page preview의 파일 탐색기 옵션 하나가 둘 다에 적용된다. 별�
 - 한 번 hover가 전부 실패했는데, 앞 테스트가 연 설정 창이 트리를 덮고 있었다 —
   `elementFromPoint`로 확인. 실험 사이에 모달을 닫을 것
 
+## 2026-11-02 — 검정 견본, 사이드바는 스니펫으로
+
+### 견본에 검정이 없었다
+
+트리의 기본 글자색은 `--nav-item-color`, 즉 흐린 회색이다. 견본은 색상 8개에
+Muted · Faint뿐이라 **아무것도 칠하지 않은 행보다 진한 선택지가 없었다.** 검정 견본을
+추가했다(`db259eb`). 값은 `var(--treenav-ink)` — 라이트에서 `#000`, 다크에서 `#fff`.
+고정 `#000`은 다크 배경에서 사라지므로 "모든 견본은 양쪽 모드에서 보인다"는 원칙대로
+뒤집었다. 다크에서도 진짜 검정이 필요하면 색 선택기에 `#000000`.
+
+### 사이드바 흰 바탕은 TreeNav가 할 일이 아니다
+
+사이드바 바탕은 테마의 `--background-secondary`이고, Things는 이를 Style Settings에
+노출하지 않는다. 테마 영역이므로 플러그인 기능으로 넣지 않고 **실사용 볼트 스니펫**으로
+처리했다 — `.obsidian/snippets/treenav_white.css` (저장소 밖).
+
+- `.theme-light .workspace-split.mod-left-split` 안에서 `--background-secondary` ·
+  `--tab-container-background`를 흰색, `--nav-item-color`(hover/active/selected 포함)를
+  검정으로. TreeNav는 패널 바탕을 직접 칠하지 않으므로 변수만 바꾸면 따라온다
+- Things 테마 CSS에 사이드바 색을 박은 곳이 없음을 확인 — 변수 덮어쓰기로 충분
+- 리본은 회색 그대로 (원하면 `--ribbon-background` 한 줄)
+- 볼트에 원래 있던 `sidebar_white.css`는 꺼져 있고 코어 탐색기(`.nav-file-title`)만
+  겨냥하며 아이콘을 이모지로 바꾼다 — TreeNav와 무관해 손대지 않았다
+- 대안: **Minimal** 테마 + Minimal Theme Settings 플러그인의 "전부 흰색"
+  (`minimal-light-white`, 리본까지 흰색). 플러그인은 미설치
+
 ### 배포 상태
 
-- GitHub: <https://github.com/hyrocket/treenav> — `main`이 origin과 같음
+- GitHub: <https://github.com/hyrocket/treenav> — `main`이 origin보다 1커밋 앞섬
+  (`db259eb`, 아직 push 안 함)
 - `test-vault`와 실사용 볼트 `D:\Obsidian_Files\Obsidian_HY` 양쪽에 최신 설치됨
 - **태그와 릴리스는 아직 없다.** 실사용 테스트 중 — 나오는 버그를 고친 뒤 태그 → 릴리스
 
