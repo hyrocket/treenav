@@ -49,7 +49,7 @@ export interface TreeNavStyle {
 
 export interface TreeNavSettings {
 	sortMode: SortMode;
-	/** Show files that are not markdown notes. */
+	/** Also list files no view opens (the core explorer's "Detect all file extensions"). */
 	showNonMarkdownFiles: boolean;
 	/** Clicking a folder title opens its folder note (when one exists). */
 	openFolderNoteOnClick: boolean;

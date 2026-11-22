@@ -147,8 +147,8 @@ export class TreeNavSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Show non-markdown files")
-			.setDesc("Also list images, PDFs and other attachments. Notes, canvases, bases and formats other plugins open are always listed.")
+			.setName("Show all file types")
+			.setDesc("Also list files Obsidian cannot open, such as .txt or .zip. Notes, canvases, images, PDFs and formats other plugins open are always listed, as in the core file explorer.")
 			.addToggle((toggle) =>
 				toggle.setValue(settings.showNonMarkdownFiles).onChange(async (value) => {
 					settings.showNonMarkdownFiles = value;

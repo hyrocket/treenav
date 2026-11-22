@@ -716,7 +716,7 @@ export class DragDropService {
 		const notes: string[] = [];
 		if (hidden > 0) {
 			notes.push(
-				`${hidden} imported ${hidden === 1 ? "file is" : "files are"} hidden — turn on "Show non-markdown files" to list ${hidden === 1 ? "it" : "them"}.`,
+				`${hidden} imported ${hidden === 1 ? "file is" : "files are"} hidden — turn on "Show all file types" to list ${hidden === 1 ? "it" : "them"}.`,
 			);
 		}
 		if (folders > 0) {

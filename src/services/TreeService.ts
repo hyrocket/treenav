@@ -2,7 +2,7 @@ import { App, TAbstractFile, TFile, TFolder } from "obsidian";
 import { StateStore } from "../state/StateStore";
 import { SortMode } from "../types";
 import { FolderNoteService } from "./FolderNoteService";
-import { isDocument } from "./fileKinds";
+import { isSupportedFile } from "./fileKinds";
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
@@ -38,7 +38,7 @@ export class TreeService {
 				continue;
 			}
 			const file = child as TFile;
-			if (!settings.showNonMarkdownFiles && !isDocument(this.app, file)) continue;
+			if (!settings.showNonMarkdownFiles && !isSupportedFile(this.app, file)) continue;
 			if (settings.hideFolderNoteFiles && this.folderNotes.isFolderNote(file)) continue;
 			visible.push(file);
 		}

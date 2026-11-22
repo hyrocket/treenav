@@ -230,7 +230,7 @@ const NOTES = {
 	"Reference/Bibliography.md": ["# Bibliography", "", "Textbooks and papers."],
 	"Reference/Image list.txt": [
 		"Not a markdown file.",
-		"Turn on 'Show non-markdown files' to see it in the tree.",
+		"Turn on 'Show all file types' to see it in the tree.",
 	],
 
 	"To read.md": [

@@ -1058,10 +1058,30 @@ Muted · Faint뿐이라 **아무것도 칠하지 않은 행보다 진한 선택�
 - 대안: **Minimal** 테마 + Minimal Theme Settings 플러그인의 "전부 흰색"
   (`minimal-light-white`, 리본까지 흰색). 플러그인은 미설치
 
+## 2026-11-22 — 이미지 폴더가 비어 보였다
+
+실사용 보고. 첨부파일 폴더(`Images`)의 이미지가 트리에 없었다. 11-01에 Canvas를 고칠 때
+이미지·PDF·오디오·비디오는 "첨부파일"로 남겨 기본으로 숨겼다 — "의도된 차이"라고
+적었지만, 사용자가 보기엔 그냥 기본 탐색기와 다른 버그였다.
+
+코어 규칙(1.12.7 asar)을 그대로 따른다:
+
+```js
+isSupportedFile(e) { return getConfig("showUnsupportedFiles") || viewRegistry.isExtensionRegistered(e.extension) }
+```
+
+- 트리 표시는 `isSupportedFile`(`services/fileKinds.ts`): 뷰가 여는 형식은 전부 —
+  이미지·PDF 포함. 코어의 "Detect all file extensions"가 켜져 있으면 전부
+- TreeNav 설정 "Show non-markdown files" → **"Show all file types"**: 이제 `.txt`·`.zip`처럼
+  아무것도 열지 못하는 파일만 더한다. 저장 키(`showNonMarkdownFiles`)는 그대로라
+  마이그레이션 없음 — 기존 `false`가 곧 코어 기본값과 같은 동작
+- `isDocument`는 검색의 Notes/Attachments 필터에만 남는다
+- 스모크 테스트: 이미지가 보이는지, `showUnsupportedFiles`가 모든 파일을 여는지, 가져온
+  `.zip`만 숨김 안내를 받는지
+
 ### 배포 상태
 
-- GitHub: <https://github.com/hyrocket/treenav> — `main`에 push 안 한 커밋이 있음
-  (`db259eb` 견본 + 이 일지)
+- GitHub: <https://github.com/hyrocket/treenav> — `main` 전부 push됨 (11-22 이미지 표시 수정까지)
 - `test-vault`와 실사용 볼트 `D:\Obsidian_Files\Obsidian_HY` 양쪽에 최신 설치됨
 - **태그와 릴리스는 아직 없다.** 실사용 테스트 중 — 나오는 버그를 고친 뒤 태그 → 릴리스
 

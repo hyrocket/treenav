@@ -968,7 +968,7 @@ assert.equal(
 );
 assert.ok(rows.length > 0, "the tree rendered no rows at all");
 assert.ok(!titles.some((t) => t.endsWith(".md")), "no row should show a .md extension");
-assert.ok(!titles.includes("attachment.txt"), "non-markdown files should be hidden");
+assert.ok(!titles.includes("attachment.txt"), "a file nothing opens should be hidden");
 assert.ok(titles.includes("Board.canvas"), "a canvas is a document, not an attachment");
 
 // Every row keeps an icon slot so titles stay aligned.
@@ -1664,16 +1664,17 @@ dragFromOutside("drop", inboxRow, [
 	outsideFile("Letter.md"),
 	outsideFile("Existing.md"),
 	outsideFile("photo.png"),
+	outsideFile("archive.zip"),
 	"folder",
 ]);
 await new Promise((resolve) => setTimeout(resolve, 20));
 
 assert.deepEqual(
 	pathsIn("Drop/Inbox"),
-	["Existing 1.md", "Existing.md", "Letter.md"],
-	"dropped notes should be copied in, a taken name numbered",
+	["Existing 1.md", "Existing.md", "Letter.md", "photo.png"],
+	"dropped files should be copied in and listed, a taken name numbered",
 );
-assert.ok(byPath.get("Drop/Inbox/photo.png"), "a dropped attachment should be copied in too");
+assert.ok(byPath.get("Drop/Inbox/archive.zip"), "a file nothing opens is copied in too, though hidden");
 assert.ok(!inboxRow.classList.contains("treenav-drop-into"), "the target mark should go once dropped");
 assert.ok(view.renderer.getItem("Drop/Inbox").isExpanded,"a closed folder should open to show what arrived");
 assert.ok(
@@ -2090,12 +2091,22 @@ assert.equal(iconOf("Board.canvas"), "layout-dashboard", "a canvas gets Obsidian
 assert.equal(iconOf("Archive"), "folder-closed", "a folder keeps the folder icon");
 assert.ok(!rowFor("Sketch.excalidraw"), "a format nothing opens stays hidden");
 
+view.renderer.getItem("Drop").setExpanded(true);
+view.renderer.getItem("Drop/Inbox").setExpanded(true);
 app.viewRegistry = { isExtensionRegistered: (ext) => ["excalidraw", "png", "pdf"].includes(ext) };
 view.rebuild();
 assert.ok(rowFor("Sketch.excalidraw"), "a format a plugin opens is a document");
 assert.equal(iconOf("Sketch.excalidraw"), "file-text", "with the plain file icon");
-assert.ok(!rowFor("Drop/Inbox/photo.png"), "an image is still an attachment");
+assert.ok(rowFor("Drop/Inbox/photo.png"), "an image is listed, as in the core explorer");
 delete app.viewRegistry;
+view.rebuild();
+assert.ok(rowFor("Drop/Inbox/photo.png"), "an image is listed even before the registry answers");
+
+const getConfig = app.vault.getConfig;
+app.vault.getConfig = (key) => key === "showUnsupportedFiles";
+view.rebuild();
+assert.ok(rowFor("Sketch.excalidraw"), "Detect all file extensions lists every file");
+app.vault.getConfig = getConfig;
 view.rebuild();
 
 console.log("other formats: ok");
